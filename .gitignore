@@ -31,6 +31,8 @@ reels/
 build/
 build_new/
 dist/
-dist_new/
+dist_*/
+build/
+build_*/
 *.spec
 *_shot.png

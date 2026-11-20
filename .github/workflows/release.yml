@@ -1,0 +1,36 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+jobs:
+  build:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+      - name: Install PyInstaller
+        run: pip install pyinstaller
+      - name: Build EXE
+        run: python -m PyInstaller --noconfirm --clean --windowed --name "SHUVAM Recondition House" --icon "assets\shuvam_icon.ico" --add-data "assets;assets" shuvam_glass_pro.py
+      - name: Compute SHA256
+        id: sha
+        run: |
+          $sha = (Get-FileHash "dist\SHUVAM Recondition House\SHUVAM Recondition House.exe" -Algorithm SHA256).Hash
+          echo "sha256=$sha" >> $env:GITHUB_OUTPUT
+      - name: Update version.json
+        run: |
+          python -c "import json; d=json.load(open('version.json')); d['sha256']='${{ steps.sha.outputs.sha256 }}'; json.dump(d,open('version.json','w'),indent=2)"
+      - name: Create Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            dist/SHUVAM Recondition House/SHUVAM Recondition House.exe
+            version.json
+          generate_release_notes: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
