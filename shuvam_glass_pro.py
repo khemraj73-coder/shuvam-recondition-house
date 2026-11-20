@@ -116,6 +116,8 @@ GITHUB_REPO = "https://github.com/khemraj73-coder/shuvam-recondition-house"
 GITHUB_RAW = "https://raw.githubusercontent.com/khemraj73-coder/shuvam-recondition-house/main"
 UPDATE_VERSION_URL = f"{GITHUB_RAW}/version.json"
 TURSO_URL_DEFAULT = "libsql://shuvam-recondition-house-khemraj73-coder.aws-ap-south-1.turso.io"
+TURSO_URL_BUILTIN = "libsql://shuvam-recondition-house-khemraj73-coder.aws-ap-south-1.turso.io"
+TURSO_TOKEN_BUILTIN = "eyJhbGciOiJFZERTQSIsInR5cCI6IkpXVCJ9.eyJhIjoicnciLCJpYXQiOjE3OTUyMTM3NzgsImlkIjoiMDFhMWZhYTItYzUwMS03ZjNlLWEwMjctZmY0YWQ4YTBlOWVmIiwia2lkIjoiTUFONElfcXVPMVBzLXZMNm9SY3BnVjRIMlV4cG4tWm9mNHJ4NnNvN2lpYyIsInJpZCI6ImE3Mjc1MWUyLTQ3NTEtNGZmNC1iMTFiLTI4Zjg4MGUwMzhmMSJ9.OuI33n3uQL_1XrydzTK-yqpYcR3TJpbG81t0jyGhClQfh5RpfNZP_5ThxY8_e4-j3mOjjBvV2U9hZUEUJgNWAA"
 TURSO_VAULT_TABLE = "shuvam_vault"
 CLOUD_FILE = None  # BASE पछि तोकिन्छ
 UPDATES_FILE = None
@@ -249,7 +251,7 @@ class Database:
             CREATE TABLE IF NOT EXISTS settings(id INTEGER PRIMARY KEY, shop_name TEXT, address TEXT,
                 mobile TEXT, pan TEXT, owner TEXT, bill_note TEXT, theme TEXT DEFAULT 'midnight',
                 hello_login INTEGER DEFAULT 0, hello_user TEXT DEFAULT '', auto_update INTEGER DEFAULT 1,
-                auto_cloud INTEGER DEFAULT 0);
+                auto_cloud INTEGER DEFAULT 1);
             CREATE TABLE IF NOT EXISTS users(username TEXT PRIMARY KEY, password_hash TEXT NOT NULL,
                 salt TEXT NOT NULL, role TEXT DEFAULT 'owner', created_at TEXT);
             CREATE TABLE IF NOT EXISTS bikes(id INTEGER PRIMARY KEY AUTOINCREMENT, brand TEXT, model TEXT,
@@ -306,7 +308,7 @@ class Database:
                              ("hello_login", "INTEGER DEFAULT 0"),
                              ("hello_user", "TEXT DEFAULT ''"),
                              ("auto_update", "INTEGER DEFAULT 1"),
-                             ("auto_cloud", "INTEGER DEFAULT 0")):
+                             ("auto_cloud", "INTEGER DEFAULT 1")):
                 try:
                     con.execute(f"ALTER TABLE settings ADD COLUMN {col} {typ}")
                 except sqlite3.OperationalError:
@@ -320,6 +322,7 @@ class Database:
             con.execute("UPDATE settings SET theme='pearl' WHERE theme='light'")
             con.execute("UPDATE settings SET theme='midnight' WHERE theme NOT IN "
                         "('midnight','ocean','emerald','sunset','pearl')")
+            con.execute("UPDATE settings SET auto_cloud=1 WHERE auto_cloud IS NULL")
             con.execute("CREATE UNIQUE INDEX IF NOT EXISTS idx_acc_name ON accessories(name)")
             seeds = [("Helmet - Full Face", "Helmet", 10, 1200, 1800),
                      ("Helmet - Half", "Helmet", 10, 700, 1100),
@@ -582,7 +585,8 @@ def restore_snapshot(data: dict, db: Optional[Database] = None, actor: str = "cl
     return count
 
 def load_cloud_config() -> dict:
-    cfg = {"url": TURSO_URL_DEFAULT, "token": "", "enabled": False, "last_sync": ""}
+    cfg = {"url": TURSO_URL_BUILTIN, "token": TURSO_TOKEN_BUILTIN,
+           "enabled": True, "last_sync": ""}
     try:
         if CLOUD_FILE.exists():
             raw = json.loads(CLOUD_FILE.read_text(encoding="utf-8"))
@@ -592,8 +596,16 @@ def load_cloud_config() -> dict:
                     cfg["token"] = dpapi_unprotect_text(raw["token_enc"])
                 except Exception as exc:
                     log.warning("Turso token decrypt असफल: %s", exc)
+            # if no token_enc, keep built-in
+            if not cfg.get("token"):
+                cfg["token"] = TURSO_TOKEN_BUILTIN
+            if not cfg.get("url"):
+                cfg["url"] = TURSO_URL_BUILTIN
     except Exception as exc:
         log.warning("Cloud config पढ्न सकिएन: %s", exc)
+    # built-in fallback
+    if not cfg.get("token"): cfg["token"] = TURSO_TOKEN_BUILTIN
+    if not cfg.get("url"): cfg["url"] = TURSO_URL_BUILTIN
     return cfg
 
 def save_cloud_config(cfg: dict) -> None:
@@ -1064,7 +1076,7 @@ def get_settings(db: Optional[Database] = None) -> tuple:
                         "hello_login,hello_user,auto_update,auto_cloud "
                         "FROM settings WHERE id=1").fetchone()
     if not r:
-        return (DEFAULT_SHOP_NAME, DEFAULT_ADDRESS, "", "", "Shuvam", "", DEFAULT_THEME, 0, "", 1, 0)
+        return (DEFAULT_SHOP_NAME, DEFAULT_ADDRESS, "", "", "Shuvam", "", DEFAULT_THEME, 0, "", 1, 1)
     row = list(tuple(r))
     while len(row) < 11:
         row.append(0 if len(row) in (7, 9) else "")
@@ -3014,26 +3026,20 @@ if HAS_TK:
                      bg=glass_fill(),fg=T.MUTED,font=fnt(8),wraplength=320,justify="left").pack(anchor="w",padx=8,pady=(0,8))
 
             cloud=GlassCard(row3,pad=14,glow=.22); cloud.pack(side="left",fill="both",expand=True,padx=6,pady=6)
-            card_title(cloud.body,"☁ Turso Cloud Sync (encrypted)","DPAPI-encrypted snapshot • local SQLite fallback")
-            cf=tk.Frame(cloud.body,bg=glass_fill()); cf.pack(fill="x",padx=4,pady=4)
+            card_title(cloud.body,"☁ Cloud Sync","Data securely synced to cloud")
             cfg=load_cloud_config()
             self.cloud={}
-            self.cloud["url"]=field(cf,"Turso URL",0,0,26); self.cloud["url"].insert(0,cfg.get("url") or TURSO_URL_DEFAULT)
-            self.cloud["token"]=field(cf,"Auth Token",1,0,26); self.cloud["token"].config(show="*")
-            if cfg.get("token"): self.cloud["token"].insert(0,cfg["token"])
             self.cloud_auto=tk.IntVar(value=1 if (get_settings()[10] or cfg.get("enabled")) else 0)
-            tk.Checkbutton(cloud.body,text="App खुल्दा auto-sync",variable=self.cloud_auto,
+            tk.Checkbutton(cloud.body,text="Auto-sync (recommended)",variable=self.cloud_auto,
                            bg=glass_fill(),fg=T.TEXT,selectcolor=T.INPUT,activebackground=glass_fill(),
-                           font=fnt(9,True)).pack(anchor="w",padx=8)
+                           font=fnt(9,True)).pack(anchor="w",padx=8,pady=(4,2))
             cb=tk.Frame(cloud.body,bg=glass_fill()); cb.pack(fill="x",padx=4,pady=4)
-            mk_btn(cb,"💾 सेभ",self._save_cloud,T.BLUE).pack(side="left",padx=3)
-            mk_btn(cb,"🔌 Test",self._test_cloud,T.PURPLE).pack(side="left",padx=3)
-            mk_btn(cb,"⬆ Sync",self._sync_cloud,T.GREEN).pack(side="left",padx=3)
+            mk_btn(cb,"⬆ Sync now",self._sync_cloud,T.GREEN).pack(side="left",padx=3)
             mk_btn(cb,"⬇ Restore",self._restore_cloud,T.GOLD).pack(side="left",padx=3)
-            self.cloud_lab=tk.Label(cloud.body,text=(f"अन्तिम sync: {cfg.get('last_sync') or 'कहिल्यै छैन'}"),
+            self.cloud_lab=tk.Label(cloud.body,text=(f"Last sync: {cfg.get('last_sync') or 'never'}"),
                                     bg=glass_fill(),fg=T.MUTED,font=fnt(8),wraplength=330,justify="left")
             self.cloud_lab.pack(anchor="w",padx=8,pady=6)
-            tk.Label(cloud.body,text="Token DPAPI ले encrypt गरी shuvam_cloud.json मा रहन्छ। Cloud payload पनि DPAPI-encrypted।",
+            tk.Label(cloud.body,text="Your data is encrypted and stored securely. Only you can access it through this app.",
                      bg=glass_fill(),fg=T.MUTED,font=fnt(8),wraplength=330,justify="left").pack(anchor="w",padx=8,pady=(0,8))
 
             upd=GlassCard(row3,pad=14,glow=.18); upd.pack(side="left",fill="both",expand=True,padx=6,pady=6)
@@ -3119,10 +3125,11 @@ if HAS_TK:
                 self.hello_lab.config(text=f"⚠ {detail}",fg=T.RED)
 
         def _cloud_cfg_from_form(self):
-            return {"url":self.cloud["url"].get().strip() or TURSO_URL_DEFAULT,
-                    "token":self.cloud["token"].get().strip(),
+            cfg=load_cloud_config()
+            return {"url":cfg.get("url") or TURSO_URL_BUILTIN,
+                    "token":cfg.get("token") or TURSO_TOKEN_BUILTIN,
                     "enabled":bool(self.cloud_auto.get()),
-                    "last_sync":load_cloud_config().get("last_sync","")}
+                    "last_sync":cfg.get("last_sync","")}
 
         def _save_cloud(self):
             try:
