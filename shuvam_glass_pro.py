@@ -1393,6 +1393,13 @@ if HAS_TK:
         def _hover(self, target):
             start = self.glow
             Anim.run(self, "hover", 260, 12, lambda p: self._set_glow(start+(target-start)*p))
+        def tilt(self, e):
+            try:
+                w,h=self.winfo_width(),self.winfo_height()
+                if w<10 or h<10: return
+                rx=(e.x/w-0.5)*6; ry=(e.y/h-0.5)*6
+                self.place_configure(x=int(self.winfo_x()+rx),y=int(self.winfo_y()+ry))
+            except Exception: pass
 
         def _set_glow(self, v):
             self.glow = v; self._draw()
@@ -1979,25 +1986,37 @@ if HAS_TK:
             pg=tk.Frame(self.content,bg=blend(T.BG0,T.BG1,0.65)); self.pages["dash"]=pg
             sf=ScrollFrame(pg); sf.pack(fill="both",expand=True); pg.wheel=sf.wheel
             b=sf.body
-            head=tk.Frame(b,bg=b["bg"]); head.pack(fill="x",padx=18,pady=(16,6))
-            left=tk.Frame(head,bg=head["bg"]); left.pack(side="left")
-            tk.Label(left,text="नमस्ते 👋",bg=head["bg"],fg=T.TEXT,font=fnt(17,True)).pack(anchor="w")
-            tk.Label(left,text=f"आज {datetime.now().strftime('%A, %d %B %Y')} — {APP_TITLE}",
-                     bg=head["bg"],fg=T.MUTED,font=fnt(9)).pack(anchor="w")
-            self.dash_seg=Seg(head,[("७ दिन","7"),("३० दिन","30")],self._set_dash_range)
-            self.dash_seg.pack(side="right",pady=8)
+            # 3D hero banner
+            hero=GlassCard(b,pad=18,glow=.45); hero.pack(fill="x",padx=12,pady=(12,6))
+            hb=tk.Frame(hero.body,bg=glass_fill()); hb.pack(fill="x")
+            hl=tk.Frame(hb,bg=glass_fill()); hl.pack(side="left")
+            tk.Label(hl,text="नमस्ते 👋",bg=glass_fill(),fg=T.TEXT,font=fnt(22,True)).pack(anchor="w")
+            tk.Label(hl,text=f"{APP_TITLE} — {datetime.now().strftime('%A, %d %B %Y')}",
+                     bg=glass_fill(),fg=T.MUTED,font=fnt(10)).pack(anchor="w")
+            tk.Label(hl,text="Real-time business intelligence",bg=glass_fill(),fg=T.ACCENT2,font=fnt(9,True)).pack(anchor="w",pady=(4,0))
+            hr=tk.Frame(hb,bg=glass_fill()); hr.pack(side="right")
+            self.dash_seg=Seg(hr,[("७ दिन","7"),("३० दिन","30")],self._set_dash_range)
+            self.dash_seg.pack(pady=4)
+            try:
+                if getattr(self,"_dash_icon",None) is None:
+                    self._dash_icon=tk.PhotoImage(file=str(ICON_PNG)).subsample(3)
+                tk.Label(hr,image=self._dash_icon,bg=glass_fill()).pack(pady=(6,0))
+            except Exception: pass
+            head=tk.Frame(b,bg=b["bg"]); head.pack(fill="x",padx=18,pady=(6,6))
 
             krow=tk.Frame(b,bg=b["bg"]); krow.pack(fill="x",padx=12,pady=6)
             self.kpis={}
             for key,title,icon,col in (("today","आजको बिक्री","💰",T.GREEN),
                     ("month","यो महिना","📈",T.ACCENT),("due","बाँकी उधारो","⏳",T.RED),
                     ("stock","स्टक Bike","🏍",T.BLUE)):
-                c=GlassCard(krow,pad=12,r=16); c.pack(side="left",fill="both",expand=True,padx=6,pady=6)
-                tk.Label(c.body,text=icon,font=fnt(16),bg=glass_fill(),fg=col).pack(anchor="w")
-                tk.Label(c.body,text=title,font=fnt(9),bg=glass_fill(),fg=T.MUTED).pack(anchor="w")
-                lab=tk.Label(c.body,text=f"{CURRENCY} 0",font=fnt(16,True),bg=glass_fill(),fg=T.TEXT)
-                lab.pack(anchor="w")
-                sub=tk.Label(c.body,text="",font=fnt(8),bg=glass_fill(),fg=T.MUTED); sub.pack(anchor="w")
+                c=GlassCard(krow,pad=14,r=18,glow=.25); c.pack(side="left",fill="both",expand=True,padx=6,pady=6)
+                top=tk.Frame(c.body,bg=glass_fill()); top.pack(fill="x")
+                badge=tk.Label(top,text=icon,font=fnt(20),bg=col,fg="#FFFFFF",width=2,padx=4)
+                badge.pack(side="left")
+                tk.Label(top,text=title,font=fnt(9,True),bg=glass_fill(),fg=T.MUTED).pack(side="left",padx=8)
+                lab=tk.Label(c.body,text=f"{CURRENCY} 0",font=fnt(20,True),bg=glass_fill(),fg=T.TEXT)
+                lab.pack(anchor="w",pady=(8,0))
+                sub=tk.Label(c.body,text="",font=fnt(9),bg=glass_fill(),fg=T.MUTED); sub.pack(anchor="w")
                 self.kpis[key]=(lab,sub)
 
             crow=tk.Frame(b,bg=b["bg"]); crow.pack(fill="x",padx=12,pady=6)
