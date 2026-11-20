@@ -59,7 +59,7 @@ STUDIO_NAME = "KRB STUDIO"
 DEV_EMAIL = "khemraj73@gmail.com"
 BRAND_LINE = f"Design & Developed by {DEV_NAME}  •  {STUDIO_NAME}  •  {DEV_EMAIL}"
 APP_NAME = "SHUVAM RECONDITION HOUSE"
-APP_VERSION = "5.0.0"
+APP_VERSION = "5.0.1"
 APP_BUILD = "2026.11"
 APP_TITLE = APP_NAME
 APP_VERSION_LABEL = f"{APP_NAME}   •   v{APP_VERSION}"
@@ -110,7 +110,7 @@ def set_lang(lang):
     global CURRENT_LANG
     if lang in LANGS: CURRENT_LANG = lang
 GENESIS = "GENESIS"
-PAYMENT_METHODS = ("Cash", "eSewa", "Khalti", "Connect IPS", "Bank Transfer",
+PAYMENT_METHODS = ("Cash", "eSewa", "Khalti", "ConnectIPS", "Bank Transfer",
                    "Fonepay", "IME Pay", "Cheque", "Other")
 GITHUB_REPO = "https://github.com/khemraj73-coder/shuvam-recondition-house"
 GITHUB_RAW = "https://raw.githubusercontent.com/khemraj73-coder/shuvam-recondition-house/main"
@@ -681,14 +681,25 @@ def check_for_update(timeout: int = 12) -> Optional[dict]:
         remote = str(raw.get("version") or "")
         if remote and version_tuple(remote) > version_tuple(APP_VERSION):
             raw["version"] = remote
+            try:
+                rel = json.loads(_http_get(
+                    "https://api.github.com/repos/khemraj73-coder/shuvam-recondition-house/releases/latest",
+                    timeout=timeout).decode("utf-8"))
+                for asset in (rel.get("assets") or []):
+                    if str(asset.get("name") or "").lower().endswith(".exe"):
+                        raw["exe_url"] = asset.get("browser_download_url")
+                        break
+            except Exception:
+                pass
             return raw
     except Exception as exc:
         log.info("Update check असफल: %s", exc)
     return None
 
 def install_update(info: dict) -> tuple[bool, str]:
-    url = (info or {}).get("url") or f"{GITHUB_RAW}/shuvam_glass_pro.py"
-    expected = ((info or {}).get("sha256") or "").strip().lower()
+    info = info or {}
+    url = info.get("exe_url") if getattr(sys, "frozen", False) else (info.get("url") or f"{GITHUB_RAW}/shuvam_glass_pro.py")
+    expected = (info.get("sha256") or "").strip().lower()
     try:
         data = _http_get(url, timeout=60)
         if expected and hashlib.sha256(data).hexdigest() != expected:
@@ -3734,6 +3745,48 @@ def run_tests() -> bool:
         ok,n=verify_audit_chain(tdb)
         assert ok and n>0, f"Audit chain समस्या: {ok},{n}"
     check("6. Bill/Bike edit + सुरक्षित soft-delete",t_edit_delete)
+
+    # ---------- 8. Themes / version / crypto / payments / snapshot ----------
+    def t_themes_new():
+        assert len(THEMES) >= 5, f"theme count={len(THEMES)}"
+        for k in THEME_ORDER:
+            assert k in THEMES, k
+        assert DEFAULT_THEME in THEMES
+        assert apply_theme("ocean") is None
+        assert get_settings()[6] in THEMES, str(get_settings()[6])
+        assert all(k in THEME_LABELS for k in THEME_ORDER)
+    check("8. Themes (5 premium)", t_themes_new)
+
+    def t_version_new():
+        assert version_tuple("5.0.1") > version_tuple("5.0.0")
+        assert version_tuple("5.0.0") > version_tuple("4.9.9")
+        assert version_tuple("4.10.0") > version_tuple("4.9.9")
+        assert version_tuple(APP_VERSION) > version_tuple("0.0.0")
+        assert APP_NAME == "SHUVAM RECONDITION HOUSE"
+        assert APP_VERSION.startswith("5.")
+    check("9. Version + branding", t_version_new)
+
+    def t_crypto_new():
+        tok = dpapi_protect_text("shuvam-test-token")
+        assert dpapi_unprotect_text(tok) == "shuvam-test-token"
+        try:
+            dpapi_unprotect_text("garbage-token"); raise AssertionError("garbage decrypt ok")
+        except Exception: pass
+    check("10. DPAPI protect/unprotect roundtrip", t_crypto_new)
+
+    def t_payments_new():
+        assert len(PAYMENT_METHODS) >= 8, str(PAYMENT_METHODS)
+        for m in ("Cash","eSewa","Khalti","ConnectIPS","Bank Transfer","Fonepay","IME Pay","Cheque","Other"):
+            assert m in PAYMENT_METHODS, m
+    check("11. Nepal payment methods", t_payments_new)
+
+    def t_snapshot_new():
+        snap = export_snapshot(tdb)
+        assert isinstance(snap, dict) and snap.get("format") == 1 and snap.get("tables")
+        db2 = Database(tmp / "restore_test.db")
+        n = restore_snapshot(snap, db2, actor="tester")
+        assert n >= 0
+    check("12. Snapshot export/restore", t_snapshot_new)
 
     print("-"*70)
     print(f"RESULT: {len(passed)} passed, {len(failed)} failed")
