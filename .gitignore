@@ -23,3 +23,6 @@ Backups/
 # OS
 .DS_Store
 Thumbs.db
+
+# Unrelated local content
+reels/

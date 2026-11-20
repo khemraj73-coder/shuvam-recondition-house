@@ -1,6 +1,6 @@
 {
-  "version": "4.0.0",
+  "version": "4.5.0",
   "url": "https://raw.githubusercontent.com/khemraj73-coder/shuvam-recondition-house/main/shuvam_glass_pro.py",
-  "notes": "SHUVAM Recondition House PRO EDITION v4.0.0 — 5 themes, Nepal payment methods, Windows Hello login, encrypted Turso sync, auto-update.",
-  "sha256": "b2d730048f3a3ada38b7163510e558f34b98bfadb713447cb205412ac7d6cb73"
+  "notes": "SHUVAM Recondition House PRO EDITION v4.5.0 — Material redesign, 5 themes, silent Turso sync, web app.",
+  "sha256": "af00242ccb31a6d4cac1840c3b5d7c4b5622ea6402312c1540a004f4b31b17ff"
 }
