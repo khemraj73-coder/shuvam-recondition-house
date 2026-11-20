@@ -26,3 +26,11 @@ Thumbs.db
 
 # Unrelated local content
 reels/
+
+# Build artifacts
+build/
+build_new/
+dist/
+dist_new/
+*.spec
+*_shot.png

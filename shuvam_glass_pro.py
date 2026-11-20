@@ -76,6 +76,39 @@ LIST_LIMIT = 200
 DEFAULT_SHOP_NAME = "SHUVAM RECONDITION HOUSE"
 DEFAULT_ADDRESS = "Hatti Chowk, Tulsipur, Dang"
 DEFAULT_THEME = "midnight"
+DEFAULT_LANG = "ne"
+CURRENT_LANG = DEFAULT_LANG
+LANGS = {
+  "ne": {
+    "app": "SHUVAM RECONDITION HOUSE",
+    "login": "लगइन", "username": "प्रयोगकर्ता नाम", "password": "पासवर्ड",
+    "dashboard": "ड्यासबोर्ड", "bike": "बाइक", "saman": "सामान", "hisab": "हिसाब",
+    "bills": "बिल", "settings": "सेटिङ",
+    "theme": "थिम", "language": "भाषा", "save": "सेभ", "cancel": "रद्द",
+    "welcome": "स्वागत छ", "today_sales": "आजको बिक्री", "month_sales": "यो महिना",
+    "pending_due": "बाँकी उधारो", "stock_bikes": "स्टक बाइक",
+    "buy": "खरिद", "sell": "बिक्री", "stock": "स्टक",
+    "customer": "ग्राहक", "phone": "फोन", "price": "मूल्य", "paid": "पैसा पाइयो",
+    "payment": "भुक्तानी", "due": "बाँकी", "total": "जम्मा",
+  },
+  "en": {
+    "app": "SHUVAM RECONDITION HOUSE",
+    "login": "Login", "username": "Username", "password": "Password",
+    "dashboard": "Dashboard", "bike": "Bike", "saman": "Goods", "hisab": "Accounts",
+    "bills": "Bills", "settings": "Settings",
+    "theme": "Theme", "language": "Language", "save": "Save", "cancel": "Cancel",
+    "welcome": "Welcome", "today_sales": "Today's Sales", "month_sales": "This Month",
+    "pending_due": "Pending Due", "stock_bikes": "Stock Bikes",
+    "buy": "Buy", "sell": "Sell", "stock": "Stock",
+    "customer": "Customer", "phone": "Phone", "price": "Price", "paid": "Paid",
+    "payment": "Payment", "due": "Due", "total": "Total",
+  },
+}
+def t(key):
+    return LANGS.get(CURRENT_LANG, LANGS["ne"]).get(key, key)
+def set_lang(lang):
+    global CURRENT_LANG
+    if lang in LANGS: CURRENT_LANG = lang
 GENESIS = "GENESIS"
 PAYMENT_METHODS = ("Cash", "eSewa", "Khalti", "Connect IPS", "Bank Transfer",
                    "Fonepay", "IME Pay", "Cheque", "Other")
@@ -115,6 +148,7 @@ def darken(c: str, t: float) -> str:
 # ================= CONFIG / DATA =================
 BASE = Path(__file__).resolve().parent if "__file__" in globals() else Path.cwd()
 CONFIG_FILE = BASE / "shuvam_config.json"          # FIX 7: script-relative
+LANG_FILE = BASE / "shuvam_lang.json"
 ASSET_DIR = BASE / "assets"
 CLOUD_FILE = BASE / "shuvam_cloud.json"
 UPDATES_FILE = BASE / "shuvam_updates.json"
@@ -148,7 +182,22 @@ def load_data_dir() -> Path:
         log.warning("config लेख्न सकिएन: %s", exc)
     return d
 
+def load_lang() -> str:
+    global CURRENT_LANG
+    try:
+        if LANG_FILE.exists():
+            CURRENT_LANG = json.loads(LANG_FILE.read_text(encoding="utf-8")).get("lang", DEFAULT_LANG)
+    except Exception: pass
+    if CURRENT_LANG not in LANGS: CURRENT_LANG = DEFAULT_LANG
+    return CURRENT_LANG
+def save_lang(lang: str) -> None:
+    global CURRENT_LANG
+    if lang in LANGS:
+        CURRENT_LANG = lang
+        try: LANG_FILE.write_text(json.dumps({"lang": lang}), encoding="utf-8")
+        except Exception: pass
 DATA_DIR = load_data_dir()
+load_lang()
 DB_FILE = DATA_DIR / "shuvam.db"
 BILL_FOLDER = DATA_DIR / "Bills"
 BILL_FOLDER.mkdir(parents=True, exist_ok=True)
@@ -1845,6 +1894,7 @@ if HAS_TK:
             self.clock=tk.Label(tp,text="",bg=tp["bg"],fg=T.MUTED,font=fnt(9))
             self.clock.pack(side="right",padx=18)
             mk_btn(tp,"◐ Theme",self._theme_menu,T.PURPLE).pack(side="right",padx=6,pady=14)
+            mk_btn(tp,"🌐 "+("EN" if CURRENT_LANG=="ne" else "NE"),self._toggle_lang,T.SIDE).pack(side="right",padx=6,pady=14)
             tk.Label(tp,text=f"v{APP_VERSION}",bg=tp["bg"],fg=T.MUTED,font=fnt(8,True)).pack(side="right",padx=8)
             self._tick()
 
@@ -1856,6 +1906,16 @@ if HAS_TK:
             cur=get_settings()[6] or DEFAULT_THEME
             nxt=THEME_ORDER[(THEME_ORDER.index(cur)+1) % len(THEME_ORDER)] if cur in THEME_ORDER else THEME_ORDER[0]
             self.set_theme(nxt)
+
+        def _toggle_lang(self):
+            new="en" if CURRENT_LANG=="ne" else "ne"
+            save_lang(new)
+            # rebuild UI to apply language (like theme)
+            prev=self.current or "dash"
+            for w in self.root.winfo_children(): w.destroy()
+            new_app=App(self.root,self.role,self.username)
+            new_app.switch_page(prev)
+            Toast.show(self.root,("Language: English" if new=="en" else "भाषा: नेपाली"),T.ACCENT)
 
         def _theme_menu(self):
             cur=get_settings()[6] or DEFAULT_THEME
@@ -2030,11 +2090,9 @@ if HAS_TK:
             tk.Label(head,text="खरिद → मर्मत → नामसारी → कर → बिक्री",bg=b["bg"],fg=T.MUTED,
                      font=fnt(9)).pack(side="left",padx=16)
             main=tk.Frame(b,bg=b["bg"]); main.pack(fill="both",expand=True,padx=12,pady=6)
-            lf=tk.Frame(main,bg=b["bg"]); lf.configure(width=480); lf.pack(side="left",fill="y")
-            lf.pack_propagate(False)
-            rf=tk.Frame(main,bg=b["bg"]); rf.pack(side="left",fill="both",expand=True)
+            col=tk.Frame(main,bg=b["bg"]); col.pack(fill="both",expand=True)
 
-            bc=GlassCard(lf,pad=12,glow=.18); bc.pack(fill="x",padx=6,pady=6)
+            bc=GlassCard(col,pad=12,glow=.18); bc.pack(fill="x",padx=6,pady=6)
             card_title(bc.body,"🛒 नयाँ Bike खरिद","लागतका सबै खर्च एकै ठाउँमा")
             form=tk.Frame(bc.body,bg=glass_fill()); form.pack(fill="x",padx=4,pady=6)
             for i in range(4): form.columnconfigure(i,weight=1)
@@ -2066,7 +2124,7 @@ if HAS_TK:
             self.bf["brand"].bind("<<ComboboxSelected>>",brand_changed)
             self._clear_bike_form()
 
-            sc=GlassCard(lf,pad=12,glow=.28); sc.pack(fill="x",padx=6,pady=6)
+            sc=GlassCard(col,pad=12,glow=.28); sc.pack(fill="x",padx=6,pady=6)
             card_title(sc.body,"💰 बिक्री गर्नुहोस्","बिल स्वतः बन्छ — profit कहिले देखिँदैन")
             sf2=tk.Frame(sc.body,bg=glass_fill()); sf2.pack(fill="x",padx=4,pady=6)
             for i in range(4): sf2.columnconfigure(i,weight=1)
@@ -2086,7 +2144,7 @@ if HAS_TK:
                 self.sf[key].bind("<KeyRelease>",lambda e:self._preview_sell_due())
             mk_btn(sc.body,"🧾 बिल बनाउ र बिक्री गर",self._sell_bike,T.ACCENT).pack(fill="x",padx=8,pady=(2,10))
 
-            rc=GlassCard(rf,pad=12,glow=.10); rc.pack(fill="both",expand=True,padx=6,pady=6)
+            rc=GlassCard(col,pad=12,glow=.10); rc.pack(fill="x",padx=6,pady=6)
             card_title(rc.body,"🏍 Bike सूची","डबल-क्लिक गरेर सम्पादन गर्नुस्")
             bar=tk.Frame(rc.body,bg=glass_fill()); bar.pack(fill="x",padx=4,pady=4)
             mk_btn(bar,"✏ सम्पादन",self._edit_bike,T.ACCENT).pack(side="left",padx=4)
@@ -2905,6 +2963,9 @@ if HAS_TK:
             self.setf["note"]=field(f,"बिल नोट",2,1,24); self.setf["note"].insert(0,s[5])
             self.setf["theme"]=combo(f,"Theme",[THEME_LABELS[k] for k in THEME_ORDER],3,0)
             self.setf["theme"].set(THEME_LABELS.get(s[6], THEME_LABELS[DEFAULT_THEME]))
+            self.setf["lang"]=combo(f,"Language",["Nepali","English"],4,0)
+            self.setf["lang"].set("Nepali" if CURRENT_LANG=="ne" else "English")
+            self.setf["lang"].config(state="readonly")
             mk_btn(c1.body,"💾 विवरण सेभ",self._save_settings,T.GREEN).pack(fill="x",padx=8,pady=(2,10))
 
             c2=GlassCard(b,pad=14,glow=.24); c2.pack(fill="x",padx=12,pady=6)
@@ -3174,6 +3235,8 @@ if HAS_TK:
                          self.setf["pan"].get().strip(),self.setf["owner"].get().strip(),self.setf["note"].get().strip(),
                          key,auto))
                     _audit(con,self.username,"SAVE_SETTINGS","theme="+key)
+                lang="ne" if self.setf["lang"].get()=="Nepali" else "en"
+                save_lang(lang)
                 if key!=old:
                     self.set_theme(key); return
                 Toast.show(self.root,"✅ सेटिङ्स सेभ भयो",T.GREEN)
@@ -3244,6 +3307,24 @@ if HAS_TK:
         except Exception:
             root._login_icon=None
         c=GlassCard(root,pad=22,glow=.38,stretch=False); c.place(relx=.5,rely=.5,anchor="center")
+        # 3D parallax on mouse move
+        def _parallax(e):
+            try:
+                rx=(e.x_root/root.winfo_screenwidth()-0.5)*12
+                ry=(e.y_root/root.winfo_screenheight()-0.5)*12
+                c.place(relx=.5,rely=.5,anchor="center",x=int(rx),y=int(ry))
+            except Exception: pass
+        root.bind("<Motion>",_parallax)
+        # language toggle
+        def _set_lang_toggle(btn,card):
+            global CURRENT_LANG
+            CURRENT_LANG = "en" if CURRENT_LANG=="ne" else "ne"
+            btn.config(text=("EN" if CURRENT_LANG=="ne" else "NE"))
+            # refresh login screen to apply language
+            login_screen(root)
+        lb=tk.Button(root,text=("EN" if CURRENT_LANG=="ne" else "NE"),bg=T.SIDE,fg=T.TEXT,font=fnt(9,True),bd=0,cursor="hand2",
+                     command=lambda:_set_lang_toggle(lb,c))
+        lb.place(relx=.98,rely=.02,anchor="ne")
         if getattr(root,"_login_icon",None):
             tk.Label(c.body,image=root._login_icon,bg=glass_fill()).pack(pady=(2,2))
         tk.Label(c.body,text="SHUVAM",bg=glass_fill(),fg=T.TEXT,font=fnt(24,True)).pack()
@@ -3251,7 +3332,7 @@ if HAS_TK:
         tk.Label(c.body,text=f"PRO EDITION  •  v{APP_VERSION}",bg=glass_fill(),fg=T.ACCENT2,font=fnt(8,True)).pack(pady=(3,0))
         tk.Frame(c.body,bg=T.EDGE,height=1).pack(fill="x",pady=14)
         f=tk.Frame(c.body,bg=glass_fill()); f.pack(fill="x",padx=8)
-        u=field(f,"Username",0,0,24); p=field(f,"Password",1,0,24); p.config(show="*")
+        u=field(f,t("username"),0,0,24); p=field(f,t("password"),1,0,24); p.config(show="*")
         u.focus_set()
         msg=tk.Label(c.body,text="",bg=glass_fill(),fg=T.RED,font=fnt(9),wraplength=330,justify="center")
         msg.pack(pady=6)
@@ -3278,7 +3359,7 @@ if HAS_TK:
                     left["n"]-=1; root.after(1000,tick)
                 tick()
         p.bind("<Return>",submit); u.bind("<Return>",lambda e:p.focus_set())
-        mk_btn(c.body,"🚪 लगइन",submit,T.ACCENT).pack(fill="x",padx=8,pady=(4,6))
+        mk_btn(c.body,"🚪 "+t("login"),submit,T.ACCENT).pack(fill="x",padx=8,pady=(4,6))
         hello_on=bool(s[7])
         if hello_on:
             def hello_login():
@@ -3372,12 +3453,36 @@ if HAS_TK:
             root.iconphoto(True,root._launch_icon)
         except Exception as exc:
             log.info("window icon: %s", exc)
-        try: root.attributes("-alpha",0.0)
-        except Exception: pass
-        if has_any_user(): login_screen(root)
-        else: setup_screen(root)
-        try: Anim.run(root,"launch",420,14,lambda p:root.attributes("-alpha",0.94+0.06*p))
-        except Exception: pass
+        root.withdraw()
+        splash=tk.Toplevel(root)
+        splash.overrideredirect(True)
+        sw,sh=root.winfo_screenwidth(),root.winfo_screenheight()
+        w,h=420,260
+        splash.geometry(f"{w}x{h}+{(sw-w)//2}+{(sh-h)//2}")
+        splash.configure(bg="#0F0D1A")
+        cv=tk.Canvas(splash,bg="#0F0D1A",highlightthickness=0,width=w,height=h)
+        cv.pack(fill="both",expand=True)
+        cv.create_text(w/2,h/2-20,text="SHUVAM",fill="#FFFFFF",font=("Segoe UI",34,"bold"))
+        cv.create_text(w/2,h/2+22,text="RECONDITION HOUSE  •  PRO",fill="#7C5CFF",font=("Segoe UI",11,"bold"))
+        cv.create_text(w/2,h-28,text="Loading…",fill="#A89FC5",font=("Segoe UI",9))
+        bar=cv.create_rectangle(w/2-120,h-46,w/2+120,h-42,fill="#1E1B3A",outline="")
+        def anim(i=0):
+            if not splash.winfo_exists(): return
+            cv.coords(bar,w/2-120,h-46,w/2-120+240*(i/40),h-42)
+            if i<40: splash.after(25,lambda:anim(i+1))
+        anim()
+        splash.update()
+        def done():
+            splash.destroy()
+            root.deiconify()
+            root.geometry("1360x860"); root.minsize(1120,730)
+            try: root.attributes("-alpha",0.0)
+            except Exception: pass
+            if has_any_user(): login_screen(root)
+            else: setup_screen(root)
+            try: Anim.run(root,"launch",420,14,lambda p:root.attributes("-alpha",0.94+0.06*p))
+            except Exception: pass
+        root.after(1100,done)
         root.mainloop()
 
 def main():
