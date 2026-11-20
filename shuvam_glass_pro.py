@@ -3305,43 +3305,63 @@ if HAS_TK:
         s=get_settings()
         apply_theme(s[6] or DEFAULT_THEME)
         for w in root.winfo_children(): w.destroy()
-        root.title(f"{APP_VERSION_LABEL} — Login"); root.geometry("800x700"); root.resizable(False,False)
-        root.configure(bg=T.BG0); _glass_bg(root)
+        root.title(f"{APP_VERSION_LABEL} — Login"); root.geometry("900x620"); root.resizable(False,False)
+        root.configure(bg=T.BG0)
         try:
             ensure_icon_assets()
             root.iconbitmap(default=str(ICON_ICO))
             root._login_icon=tk.PhotoImage(file=str(ICON_PNG)).subsample(2)
         except Exception:
             root._login_icon=None
-        c=GlassCard(root,pad=22,glow=.38,stretch=False); c.place(relx=.5,rely=.5,anchor="center")
-        # 3D parallax on mouse move
-        def _parallax(e):
-            try:
-                rx=(e.x_root/root.winfo_screenwidth()-0.5)*12
-                ry=(e.y_root/root.winfo_screenheight()-0.5)*12
-                c.place(relx=.5,rely=.5,anchor="center",x=int(rx),y=int(ry))
-            except Exception: pass
-        root.bind("<Motion>",_parallax)
+        # animated 3D-ish background canvas
+        bgc=tk.Canvas(root,bg=T.BG0,highlightthickness=0); bgc.place(relwidth=1,relheight=1)
+        blobs=[(0.15,0.2,260,T.PURPLE),(0.85,0.25,230,T.BLUE),(0.7,0.85,280,T.ACCENT3),(0.2,0.8,200,T.GOLD)]
+        def draw_bg(t=0):
+            bgc.delete("all")
+            w,h=bgc.winfo_width() or 900, bgc.winfo_height() or 620
+            for i in range(28):
+                yy=i/27
+                bgc.create_rectangle(0,h*yy,w,h*(yy+1)+1,fill=blend(T.BG0,T.BG1,yy),outline="")
+            for x,y,r,col in blobs:
+                cx,cy=x*w+math.sin(t+x)*18, y*h+math.cos(t+y)*18
+                for rr in range(r,0,-18):
+                    bgc.create_oval(cx-rr,cy-rr,cx+rr,cy+rr,fill=blend(T.BG0,col,0.06+0.002*(r-rr)),outline="")
+            bgc.create_text(w/2,48,text="SHUVAM",fill=T.TEXT,font=("Segoe UI",40,"bold"))
+            bgc.create_text(w/2,82,text="RECONDITION HOUSE  •  PRO",fill=T.ACCENT2,font=("Segoe UI",11,"bold"))
+            bgc.create_text(w/2,h-24,text="Secure login • Windows Hello • Cloud sync",fill=T.MUTED,font=("Segoe UI",9))
+        def tick(t=0):
+            if not bgc.winfo_exists(): return
+            draw_bg(t); bgc.after(40,lambda:tick(t+0.05))
+        root.after(50,tick)
         # language toggle
-        def _set_lang_toggle(btn,card):
+        def _set_lang_toggle(btn):
             global CURRENT_LANG
             CURRENT_LANG = "en" if CURRENT_LANG=="ne" else "ne"
             btn.config(text=("EN" if CURRENT_LANG=="ne" else "NE"))
-            # refresh login screen to apply language
             login_screen(root)
         lb=tk.Button(root,text=("EN" if CURRENT_LANG=="ne" else "NE"),bg=T.SIDE,fg=T.TEXT,font=fnt(9,True),bd=0,cursor="hand2",
-                     command=lambda:_set_lang_toggle(lb,c))
-        lb.place(relx=.98,rely=.02,anchor="ne")
+                     command=lambda:_set_lang_toggle(lb))
+        lb.place(relx=.97,rely=.03,anchor="ne")
+        # 3D card container
+        c=GlassCard(root,pad=24,glow=.45,stretch=False); c.place(relx=.5,rely=.55,anchor="center",width=400)
+        # parallax tilt
+        def _parallax(e):
+            try:
+                rx=(e.x_root/root.winfo_screenwidth()-0.5)
+                ry=(e.y_root/root.winfo_screenheight()-0.5)
+                c.place(relx=.5,rely=.55,anchor="center",x=int(rx*16),y=int(ry*16))
+                c._draw()
+            except Exception: pass
+        root.bind("<Motion>",_parallax)
         if getattr(root,"_login_icon",None):
             tk.Label(c.body,image=root._login_icon,bg=glass_fill()).pack(pady=(2,2))
-        tk.Label(c.body,text="SHUVAM",bg=glass_fill(),fg=T.TEXT,font=fnt(24,True)).pack()
-        tk.Label(c.body,text=APP_TITLE,bg=glass_fill(),fg=T.MUTED,font=fnt(10,True)).pack()
-        tk.Label(c.body,text=f"PRO EDITION  •  v{APP_VERSION}",bg=glass_fill(),fg=T.ACCENT2,font=fnt(8,True)).pack(pady=(3,0))
-        tk.Frame(c.body,bg=T.EDGE,height=1).pack(fill="x",pady=14)
+        tk.Label(c.body,text="🔐 "+t("login"),bg=glass_fill(),fg=T.TEXT,font=fnt(20,True)).pack(pady=(4,2))
+        tk.Label(c.body,text=APP_TITLE,bg=glass_fill(),fg=T.MUTED,font=fnt(9,True)).pack()
+        tk.Frame(c.body,bg=T.EDGE,height=1).pack(fill="x",pady=12)
         f=tk.Frame(c.body,bg=glass_fill()); f.pack(fill="x",padx=8)
         u=field(f,t("username"),0,0,24); p=field(f,t("password"),1,0,24); p.config(show="*")
         u.focus_set()
-        msg=tk.Label(c.body,text="",bg=glass_fill(),fg=T.RED,font=fnt(9),wraplength=330,justify="center")
+        msg=tk.Label(c.body,text="",bg=glass_fill(),fg=T.RED,font=fnt(9),wraplength=340,justify="center")
         msg.pack(pady=6)
         attempts={"n":0,"lock":False}
         def enter_app(username,role):
@@ -3350,12 +3370,12 @@ if HAS_TK:
             App(root,role,username)
         def submit(e=None):
             if attempts["lock"]: return
-            username=u.get().strip()          # widgets destroy हुनु अघि capture गर्नुपर्छ
+            username=u.get().strip()
             role=check_login(username,p.get())
             if role:
                 enter_app(username,role); return
             attempts["n"]+=1
-            msg.config(text=f"⚠ गलत Username/Password ({attempts['n']}/{MAX_LOGIN_ATTEMPTS})")
+            msg.config(text=f"⚠ गलत {t('username')}/{t('password')} ({attempts['n']}/{MAX_LOGIN_ATTEMPTS})")
             if attempts["n"]>=MAX_LOGIN_ATTEMPTS:
                 attempts["lock"]=True; left={"n":LOCKOUT_SECONDS}
                 def tick():
@@ -3372,14 +3392,13 @@ if HAS_TK:
             def hello_login():
                 msg.config(text="Windows Hello prompt हेर्नुस्…",fg=T.GOLD)
                 hb.config(state="disabled")
-                def work():
-                    return windows_hello_verify("Login to SHUVAM Recondition House")
+                def work(): return windows_hello_verify("Login to SHUVAM Recondition House")
                 def done(res):
                     if not root.winfo_exists(): return
                     ok,detail=res
                     if not ok:
                         hb.config(state="normal")
-                        msg.config(text=f"⚠ {detail} — Password प्रयोग गर्नुस्",fg=T.RED); return
+                        msg.config(text=f"⚠ {detail}",fg=T.RED); return
                     uname=(s[8] or s[4] or "").strip()
                     role=None
                     if uname:
@@ -3388,22 +3407,20 @@ if HAS_TK:
                             role=r["role"] if r else None
                     if not role:
                         with DB.read() as con:
-                            r=con.execute("SELECT username,role FROM users WHERE role='owner' "
-                                          "ORDER BY created_at LIMIT 1").fetchone()
+                            r=con.execute("SELECT username,role FROM users WHERE role='owner' ORDER BY created_at LIMIT 1").fetchone()
                             if r: uname,role=r["username"],r["role"]
                     if role: enter_app(uname,role)
                     else:
                         hb.config(state="normal")
-                        msg.config(text="⚠ Hello प्रयोगकर्ता भेटिएन — Password ले लगइन गर्नुस्",fg=T.RED)
+                        msg.config(text="⚠ Hello user भेटिएन",fg=T.RED)
                 def bg():
                     res=work()
                     try: root.after(0,lambda:done(res))
                     except Exception: pass
                 threading.Thread(target=bg,daemon=True).start()
-            hb=mk_btn(c.body,"😊 Windows Hello ले लगइन",hello_login,T.PURPLE)
+            hb=mk_btn(c.body,"😊 Windows Hello",hello_login,T.PURPLE)
             hb.pack(fill="x",padx=8,pady=(0,6))
-        tk.Label(c.body,text=BRAND_LINE,bg=glass_fill(),fg=T.MUTED,font=fnt(7),
-                 wraplength=320,justify="center").pack(pady=(4,8))
+        tk.Label(c.body,text=BRAND_LINE,bg=glass_fill(),fg=T.MUTED,font=fnt(7),wraplength=360,justify="center").pack(pady=(4,8))
 
     def setup_screen(root):
         apply_theme(get_settings()[6] or DEFAULT_THEME)
