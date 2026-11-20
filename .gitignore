@@ -1,0 +1,25 @@
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+*.bak-*
+*.update.tmp
+
+# Runtime data / user config (never commit)
+shuvam_config.json
+shuvam_cloud.json
+shuvam_updates.json
+*.db
+*.db-wal
+*.db-shm
+Bills/
+Data/
+Backups/
+
+# Local token (if device flow saved it)
+.github_token
+
+# OS
+.DS_Store
+Thumbs.db
