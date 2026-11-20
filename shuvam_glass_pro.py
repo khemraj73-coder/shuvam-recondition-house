@@ -1231,16 +1231,16 @@ class Theme:
 
 THEMES = {
     "midnight": Theme("midnight",
-        "#060814", "#0C1028", "#171A3A",
-        "#131A35", "#1A2244", "#303B70", "#E9EEFF", "#03050C",
-        "#080C1E", "#98A3C7", "#6D5DF6",
-        "#2A3460", "#F4F7FF", "#8B95B8", "#0F1630",
-        "#7C5CFF", "#22D3EE", "#F472B6",
-        "#34D399", "#FB7185", "#38BDF8", "#A78BFA", "#FBBF24",
-        "#6D5DF6", "#22D3EE", "#EC4899",
-        ("#7C5CFF", "#22D3EE"),
-        "#10362A", "#6EE7B7", "#3B1822", "#FDA4AF",
-        "#1C2444", "#A9B4D0", "#0F2F44", "#7DD3FC", "#2A1F4E", "#C4B5FD"),
+        "#030712", "#0B1120", "#141B2D",
+        "#0F1629", "#1A2238", "#3B82F6", "#F8FAFC", "#010204",
+        "#070B14", "#94A3B8", "#3B82F6",
+        "#1E293B", "#F8FAFC", "#64748B", "#070B14",
+        "#3B82F6", "#06B6D4", "#EC4899",
+        "#10B981", "#EF4444", "#6366F1", "#8B5CF6", "#F59E0B",
+        "#3B82F6", "#06B6D4", "#EC4899",
+        ("#3B82F6", "#06B6D4"),
+        "#0D2818", "#34D399", "#2D1218", "#F87171",
+        "#0F1629", "#94A3B8", "#0C2340", "#38BDF8", "#1E1836", "#A78BFA"),
     "ocean": Theme("ocean",
         "#04121C", "#08273A", "#0B3B54",
         "#0C2B3E", "#12384F", "#1E5A78", "#E7FBFF", "#020A10",
@@ -1326,12 +1326,12 @@ class Anim:
 
 # ================= GLASS WIDGETS (Tkinter मात्र) =================
 if HAS_TK:
-    FONT_FAMILY = "Segoe UI"
+    FONT_FAMILY = "Poppins"
 
     def pick_font(root) -> str:
         try:
             fams = set(tkfont.families(root))
-            for f in ("Segoe UI", "Nirmala UI", "DejaVu Sans", "Arial"):
+            for f in ("Poppins", "Inter", "Segoe UI", "Nirmala UI", "DejaVu Sans", "Arial"):
                 if f in fams:
                     return f
         except Exception:
@@ -3390,9 +3390,18 @@ if HAS_TK:
         msg.pack(pady=6)
         attempts={"n":0,"lock":False}
         def enter_app(username,role):
-            for w in root.winfo_children(): w.destroy()
-            root.resizable(True,True); root.geometry("1360x860")
-            App(root,role,username)
+            try:
+                Anim.run(root,"loginout",260,12,lambda p:root.attributes("-alpha",1.0-0.6*p))
+            except Exception: pass
+            root.after(280,_do_enter)
+            def _do_enter():
+                for w in root.winfo_children(): w.destroy()
+                root.resizable(True,True); root.geometry("1360x860")
+                try: root.attributes("-alpha",0.4)
+                except Exception: pass
+                App(root,role,username)
+                try: Anim.run(root,"loginin",420,14,lambda p:root.attributes("-alpha",0.4+0.6*p))
+                except Exception: pass
         def submit(e=None):
             if attempts["lock"]: return
             username=u.get().strip()
@@ -3494,6 +3503,8 @@ if HAS_TK:
 
     def launch():
         root=tk.Tk()
+        global FONT_FAMILY
+        FONT_FAMILY = pick_font(root)
         try: ensure_icon_assets()
         except Exception as exc: log.info("icon: %s", exc)
         try:
