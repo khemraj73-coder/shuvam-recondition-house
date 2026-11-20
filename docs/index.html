@@ -1,0 +1,58 @@
+<!DOCTYPE html>
+<html lang="ne">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>SHUVAM Recondition House — Pro</title>
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+<div id="app">
+  <div id="auth" class="screen">
+    <div class="auth-card">
+      <div class="brand">
+        <div class="logo">S</div>
+        <h1>SHUVAM</h1>
+        <p>Recondition House • Pro</p>
+      </div>
+      <div id="auth-msg" class="msg"></div>
+      <input id="email" type="email" placeholder="Email">
+      <input id="password" type="password" placeholder="Password (8+)">
+      <button id="btn-login" class="btn primary">Login</button>
+      <button id="btn-register" class="btn">Register</button>
+      <div class="divider">or</div>
+      <button id="btn-google" class="btn google">Continue with Google</button>
+      <button id="btn-apple" class="btn apple">Continue with Apple</button>
+      <input id="phone" type="tel" placeholder="+977 phone">
+      <button id="btn-phone" class="btn">Send OTP</button>
+      <input id="otp" type="text" placeholder="OTP">
+      <button id="btn-verify" class="btn">Verify OTP</button>
+    </div>
+  </div>
+  <div id="main" class="screen hidden">
+    <aside class="sidebar">
+      <div class="brand-side"><div class="logo-sm">S</div><span>SHUVAM</span></div>
+      <nav>
+        <button data-page="dash" class="nav-item active">Dashboard</button>
+        <button data-page="bike" class="nav-item">Bike</button>
+        <button data-page="saman" class="nav-item">Saman</button>
+        <button data-page="hisab" class="nav-item">Hisab</button>
+        <button data-page="bills" class="nav-item">Bills</button>
+        <button data-page="settings" class="nav-item">Settings</button>
+      </nav>
+      <button id="btn-logout" class="btn small">Logout</button>
+    </aside>
+    <section class="content">
+      <header class="topbar">
+        <h2 id="page-title">Dashboard</h2>
+        <div class="top-actions">
+          <select id="theme-select"></select>
+        </div>
+      </header>
+      <div id="page-body" class="page-body"></div>
+    </section>
+  </div>
+</div>
+<script type="module" src="app.js"></script>
+</body>
+</html>
