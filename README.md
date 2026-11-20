@@ -1,4 +1,4 @@
-# SHUVAM RECONDITION HOUSE — PRO EDITION v4.0.0
+# SHUVAM RECONDITION HOUSE — PRO EDITION v5.0.1
 
 Production-grade desktop management app for a recondition (buy / repair / sell) motorcycle shop.
 Built with Python + Tkinter, single-file architecture, offline-first SQLite, optional encrypted Turso cloud sync.
@@ -24,7 +24,7 @@ First run creates the owner account.
 ```powershell
 python shuvam_glass_pro.py --test
 ```
-Current suite: 7 passed, 0 failed.
+Current suite: 12 passed, 0 failed.
 
 ## Build Windows executable
 ```powershell
