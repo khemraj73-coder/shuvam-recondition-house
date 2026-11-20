@@ -59,7 +59,7 @@ STUDIO_NAME = "KRB STUDIO"
 DEV_EMAIL = "khemraj73@gmail.com"
 BRAND_LINE = f"Design & Developed by {DEV_NAME}  •  {STUDIO_NAME}  •  {DEV_EMAIL}"
 APP_NAME = "SHUVAM RECONDITION HOUSE"
-APP_VERSION = "4.5.0"
+APP_VERSION = "5.0.0"
 APP_BUILD = "2026.11"
 APP_TITLE = APP_NAME
 APP_VERSION_LABEL = f"{APP_NAME}   •   v{APP_VERSION}"
@@ -1838,7 +1838,7 @@ if HAS_TK:
         def _shell(self):
             root=self.root
             root.title(APP_VERSION_LABEL)
-            root.geometry("1360x860"); root.minsize(1120,730)
+            root.geometry("1400x900"); root.minsize(1180,760)
             root.configure(bg=T.BG0)
             try:
                 ensure_icon_assets()
@@ -1855,21 +1855,21 @@ if HAS_TK:
             except Exception: pass
             style_trees()
             self.cv=GradientCanvas(root); self.cv.pack(fill="both",expand=True)
-            self.cv.blobs=[(0.10,0.08,200,T.PURPLE),(0.90,0.14,170,T.BLUE),
-                           (0.72,0.94,220,T.GREEN),(0.22,0.88,180,T.GOLD)]
+            self.cv.blobs=[(0.05,0.05,260,T.PURPLE),(0.95,0.1,200,T.BLUE),
+                           (0.8,0.9,240,T.ACCENT3),(0.15,0.9,200,T.GOLD)]
             self.side=tk.Frame(self.cv,bg=T.SIDE)
-            self.top=tk.Frame(self.cv,bg=blend(T.BG0,T.CARD,0.72))
-            self.content=tk.Frame(self.cv,bg=blend(T.BG0,T.BG1,0.65))
-            self.ws=self.cv.create_window(0,0,anchor="nw",window=self.side,width=224)
-            self.wt=self.cv.create_window(0,0,anchor="nw",window=self.top,height=66)
+            self.top=tk.Frame(self.cv,bg=blend(T.BG0,T.CARD,0.85))
+            self.content=tk.Frame(self.cv,bg=blend(T.BG0,T.BG1,0.5))
+            self.ws=self.cv.create_window(0,0,anchor="nw",window=self.side,width=236)
+            self.wt=self.cv.create_window(0,0,anchor="nw",window=self.top,height=70)
             self.wc=self.cv.create_window(0,0,anchor="nw",window=self.content)
             def layout(e=None):
                 w,h=self.cv.winfo_width(),self.cv.winfo_height()
                 if w<20 or h<20: return
                 self.cv.itemconfigure(self.ws,height=h)
-                self.cv.coords(self.wt,224,0); self.cv.itemconfigure(self.wt,width=w-224)
-                self.cv.coords(self.wc,224,66)
-                self.cv.itemconfigure(self.wc,width=max(20,w-224),height=max(20,h-66))
+                self.cv.coords(self.wt,236,0); self.cv.itemconfigure(self.wt,width=w-236)
+                self.cv.coords(self.wc,236,70)
+                self.cv.itemconfigure(self.wc,width=max(20,w-236),height=max(20,h-70))
             self.cv.bind("<Configure>",layout,add="+")
             self.cv.redraw()
             self._build_side(); self._build_top()
@@ -1882,17 +1882,16 @@ if HAS_TK:
 
         def _build_side(self):
             s=self.side
-            brand=tk.Frame(s,bg=T.SIDE); brand.pack(fill="x",padx=16,pady=(18,4))
+            brand=tk.Frame(s,bg=T.SIDE); brand.pack(fill="x",padx=18,pady=(20,8))
             try:
                 self.brand_img=tk.PhotoImage(file=str(ICON_PNG)).subsample(4)
-                tk.Label(brand,image=self.brand_img,bg=T.SIDE).pack(side="left",padx=(2,10))
+                tk.Label(brand,image=self.brand_img,bg=T.SIDE).pack(side="left",padx=(0,10))
             except Exception:
                 pass
             bt=tk.Frame(brand,bg=T.SIDE); bt.pack(side="left",fill="x")
-            tk.Label(bt,text="SHUVAM",bg=T.SIDE,fg=T.TEXT,font=fnt(15,True)).pack(anchor="w")
+            tk.Label(bt,text="SHUVAM",bg=T.SIDE,fg=T.TEXT,font=fnt(14,True)).pack(anchor="w")
             tk.Label(bt,text="RECONDITION HOUSE",bg=T.SIDE,fg=T.SIDE_TXT,font=fnt(7,True)).pack(anchor="w")
-            tk.Label(bt,text=f"PRO EDITION • v{APP_VERSION}",bg=T.SIDE,fg=T.ACCENT2,font=fnt(7,True)).pack(anchor="w",pady=(2,0))
-            tk.Frame(s,bg=T.EDGE,height=1).pack(fill="x",padx=18,pady=14)
+            tk.Frame(s,bg=T.EDGE,height=1).pack(fill="x",padx=16,pady=10)
             for key,icon,text in self.NAV:
                 if key in ("hisab","settings") and not self.is_owner: continue
                 nav=NavItem(s,icon,text,lambda k=key:self.switch_page(k))
@@ -1906,15 +1905,23 @@ if HAS_TK:
 
         def _build_top(self):
             tp=self.top
-            self.title_lab=tk.Label(tp,text="Dashboard",bg=tp["bg"],fg=T.TEXT,font=fnt(15,True))
+            self.title_lab=tk.Label(tp,text="Dashboard",bg=tp["bg"],fg=T.TEXT,font=fnt(18,True))
             self.title_lab.pack(side="left",padx=24)
             self.sub_lab=tk.Label(tp,text="",bg=tp["bg"],fg=T.MUTED,font=fnt(9))
-            self.sub_lab.pack(side="left",padx=8)
+            self.sub_lab.pack(side="left",padx=4)
+            # search box
+            sf=tk.Frame(tp,bg=T.INPUT,highlightthickness=1,highlightbackground=T.BORDER)
+            sf.pack(side="left",padx=24,ipady=2)
+            tk.Label(sf,text="🔍",bg=T.INPUT,fg=T.MUTED,font=fnt(10)).pack(side="left",padx=(8,4))
+            self.search_entry=tk.Entry(sf,width=28,font=fnt(10),bg=T.INPUT,fg=T.TEXT,bd=0,relief="flat",insertbackground=T.TEXT)
+            self.search_entry.pack(side="left",ipady=6,padx=(0,8))
             self.clock=tk.Label(tp,text="",bg=tp["bg"],fg=T.MUTED,font=fnt(9))
             self.clock.pack(side="right",padx=18)
-            mk_btn(tp,"◐ Theme",self._theme_menu,T.PURPLE).pack(side="right",padx=6,pady=14)
-            mk_btn(tp,"🌐 "+("EN" if CURRENT_LANG=="ne" else "NE"),self._toggle_lang,T.SIDE).pack(side="right",padx=6,pady=14)
-            tk.Label(tp,text=f"v{APP_VERSION}",bg=tp["bg"],fg=T.MUTED,font=fnt(8,True)).pack(side="right",padx=8)
+            mk_btn(tp,"◐",self._theme_menu,T.PURPLE).pack(side="right",padx=4,pady=14)
+            mk_btn(tp,"🌐",self._toggle_lang,T.SIDE).pack(side="right",padx=4,pady=14)
+            # avatar
+            av=tk.Label(tp,text="👤",bg=T.ACCENT,fg="#FFFFFF",font=fnt(11,True),width=2,padx=6)
+            av.pack(side="right",padx=(4,12),pady=14)
             self._tick()
 
         def _tick(self):
@@ -1987,13 +1994,13 @@ if HAS_TK:
             sf=ScrollFrame(pg); sf.pack(fill="both",expand=True); pg.wheel=sf.wheel
             b=sf.body
             # 3D hero banner
-            hero=GlassCard(b,pad=18,glow=.45); hero.pack(fill="x",padx=12,pady=(12,6))
+            hero=GlassCard(b,pad=20,glow=.5); hero.pack(fill="x",padx=12,pady=(12,6))
             hb=tk.Frame(hero.body,bg=glass_fill()); hb.pack(fill="x")
             hl=tk.Frame(hb,bg=glass_fill()); hl.pack(side="left")
-            tk.Label(hl,text="नमस्ते 👋",bg=glass_fill(),fg=T.TEXT,font=fnt(22,True)).pack(anchor="w")
+            tk.Label(hl,text="नमस्ते 👋",bg=glass_fill(),fg=T.TEXT,font=fnt(26,True)).pack(anchor="w")
             tk.Label(hl,text=f"{APP_TITLE} — {datetime.now().strftime('%A, %d %B %Y')}",
-                     bg=glass_fill(),fg=T.MUTED,font=fnt(10)).pack(anchor="w")
-            tk.Label(hl,text="Real-time business intelligence",bg=glass_fill(),fg=T.ACCENT2,font=fnt(9,True)).pack(anchor="w",pady=(4,0))
+                     bg=glass_fill(),fg=T.MUTED,font=fnt(11)).pack(anchor="w")
+            tk.Label(hl,text="Real-time business intelligence",bg=glass_fill(),fg=T.ACCENT2,font=fnt(10,True)).pack(anchor="w",pady=(6,0))
             hr=tk.Frame(hb,bg=glass_fill()); hr.pack(side="right")
             self.dash_seg=Seg(hr,[("७ दिन","7"),("३० दिन","30")],self._set_dash_range)
             self.dash_seg.pack(pady=4)
@@ -2002,7 +2009,6 @@ if HAS_TK:
                     self._dash_icon=tk.PhotoImage(file=str(ICON_PNG)).subsample(3)
                 tk.Label(hr,image=self._dash_icon,bg=glass_fill()).pack(pady=(6,0))
             except Exception: pass
-            head=tk.Frame(b,bg=b["bg"]); head.pack(fill="x",padx=18,pady=(6,6))
 
             krow=tk.Frame(b,bg=b["bg"]); krow.pack(fill="x",padx=12,pady=6)
             self.kpis={}
@@ -2014,7 +2020,7 @@ if HAS_TK:
                 badge=tk.Label(top,text=icon,font=fnt(20),bg=col,fg="#FFFFFF",width=2,padx=4)
                 badge.pack(side="left")
                 tk.Label(top,text=title,font=fnt(9,True),bg=glass_fill(),fg=T.MUTED).pack(side="left",padx=8)
-                lab=tk.Label(c.body,text=f"{CURRENCY} 0",font=fnt(20,True),bg=glass_fill(),fg=T.TEXT)
+                lab=tk.Label(c.body,text=f"{CURRENCY} 0",font=fnt(22,True),bg=glass_fill(),fg=T.TEXT)
                 lab.pack(anchor="w",pady=(8,0))
                 sub=tk.Label(c.body,text="",font=fnt(9),bg=glass_fill(),fg=T.MUTED); sub.pack(anchor="w")
                 self.kpis[key]=(lab,sub)
