@@ -40,3 +40,6 @@ build_*/
 # Runtime logs
 error.log
 *.log
+
+# Runtime receipts
+receipts/
