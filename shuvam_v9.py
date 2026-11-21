@@ -2832,8 +2832,50 @@ TRUE NET PROFIT        : {f(r['Net Profit'])}
         ctk.CTkLabel(card, text="Database Backup", font=(FONT, 16, "bold")).pack(pady=(25, 5))
         ctk.CTkLabel(card, text=f"Automatic daily backups are kept in:\n{BACKUP_DIR}",
                      text_color=COLORS["text_muted"]).pack()
-        ctk.CTkButton(card, text="💾 Safe Backup (choose location)", fg_color=COLORS["accent_blue"],
+        ctk.CTkButton(card, text="Safe Backup (choose location)", fg_color=COLORS["accent_blue"],
                       command=self.backup_db).pack(pady=10)
+
+        ctk.CTkLabel(card, text="Cloud Sync & Updates", font=(FONT, 16, "bold")).pack(pady=(25, 5))
+        cfg = load_cloud_config()
+        self.cloud_status_lbl = ctk.CTkLabel(card, text=f"Last sync: {cfg.get('last_sync') or 'never'}",
+                                            text_color=COLORS["text_muted"])
+        self.cloud_status_lbl.pack(pady=(0, 6))
+        self.auto_sync_var = ctk.BooleanVar(value=bool(cfg.get("enabled", True)))
+        ctk.CTkCheckBox(card, text="Auto-sync (silent, background)", variable=self.auto_sync_var,
+                        command=self._toggle_auto_sync).pack(pady=4)
+
+        def _sync_now():
+            def work():
+                try:
+                    ts = cloud_push(load_cloud_config())
+                    self.after(0, lambda: self.cloud_status_lbl.configure(text=f"Last sync: {ts}"))
+                    self.after(0, lambda: self.info("Cloud sync complete."))
+                except Exception as ex:
+                    self.after(0, lambda: self.err(f"Sync failed: {ex}"))
+            import threading
+            threading.Thread(target=work, daemon=True).start()
+
+        def _check_update():
+            def work():
+                try:
+                    info = check_for_update()
+                    if info:
+                        self.after(0, lambda: self.info(f"New version {info.get('version')} available.\n"
+                                                       "Use auto-update to install."))
+                    else:
+                        self.after(0, lambda: self.info("You are on the latest version."))
+                except Exception as ex:
+                    self.after(0, lambda: self.err(f"Update check failed: {ex}"))
+            import threading
+            threading.Thread(target=work, daemon=True).start()
+
+        btn_row = ctk.CTkFrame(card, fg_color="transparent")
+        btn_row.pack(pady=6)
+        ctk.CTkButton(btn_row, text="Sync now", fg_color=COLORS["accent_green"],
+                      command=_sync_now).pack(side="left", padx=5)
+        ctk.CTkButton(btn_row, text="Check for updates", fg_color=COLORS["accent_blue"],
+                      command=_check_update).pack(side="left", padx=5)
+
         ctk.CTkLabel(card, text=f"App Version: {APP_VERSION}", text_color=COLORS["text_muted"]).pack(pady=15)
 
     def save_shop_info(self):
@@ -2862,6 +2904,14 @@ TRUE NET PROFIT        : {f(r['Net Profit'])}
         if self.must_change:
             self.must_change = False
             self.show_page("Dashboard")
+
+    def _toggle_auto_sync(self):
+        try:
+            cfg = load_cloud_config()
+            cfg["enabled"] = bool(self.auto_sync_var.get())
+            save_cloud_config(cfg)
+        except Exception as ex:
+            self.err(ex)
 
     def backup_db(self):
         path = filedialog.asksaveasfilename(defaultextension=".db", filetypes=[("SQLite DB", "*.db")],
