@@ -64,7 +64,7 @@ PART_CATEGORIES = ["General", "Engine", "Brake", "Electrical", "Body", "Tyre/Tub
 PHOTO_EXTS = (".jpg", ".jpeg", ".png", ".webp")
 MAX_PHOTO_MB = 8
 AUDIT_LIMIT = 500
-DEFAULT_CONFIG = {"shop_name": APP_NAME, "shop_address": "Kathmandu, Nepal", "shop_phone": "+977-9800000000"}
+DEFAULT_CONFIG = {"shop_name": APP_NAME, "shop_address": "Kathmandu, Nepal", "shop_phone": "+977-9800000000", "shop_pan": ""}
 
 
 def save_config(cfg):
@@ -1329,6 +1329,19 @@ class ShuvamApp(ctk.CTk):
             import threading
             threading.Thread(target=_silent_cloud_sync, daemon=True).start()
             self.after(1500, lambda: threading.Thread(target=_auto_update_check, args=(self, username), daemon=True).start())
+            # offline retry: try sync every 90s when offline
+            def _offline_retry():
+                import time
+                while True:
+                    time.sleep(90)
+                    try:
+                        cfg = load_cloud_config()
+                        if not cfg.get("enabled", True):
+                            continue
+                        cloud_push(cfg)
+                    except Exception:
+                        pass
+            threading.Thread(target=_offline_retry, daemon=True).start()
         except Exception:
             logging.exception("boot hooks failed")
 
@@ -2807,6 +2820,7 @@ TRUE NET PROFIT        : {f(r['Net Profit'])}
         self.shop_name_entry = self.entry(card, "Shop Name", 320, CONFIG.get("shop_name", ""))
         self.shop_addr_entry = self.entry(card, "Address", 320, CONFIG.get("shop_address", ""))
         self.shop_phone_entry = self.entry(card, "Phone", 320, CONFIG.get("shop_phone", ""))
+        self.shop_pan_entry = self.entry(card, "PAN / VAT No.", 320, CONFIG.get("shop_pan", ""))
         ctk.CTkButton(card, text="Save Shop Info", command=self.save_shop_info).pack(pady=10)
         ctk.CTkLabel(card, text="Change Password", font=(FONT, 16, "bold")).pack(pady=(25, 10))
         self.old_pwd = ctk.CTkEntry(card, placeholder_text="Current Password", show="*", width=320)
@@ -2829,6 +2843,7 @@ TRUE NET PROFIT        : {f(r['Net Profit'])}
         CONFIG["shop_name"] = name
         CONFIG["shop_address"] = self.shop_addr_entry.get().strip()
         CONFIG["shop_phone"] = self.shop_phone_entry.get().strip()
+        CONFIG["shop_pan"] = self.shop_pan_entry.get().strip()
         try:
             save_config(CONFIG)
         except OSError as ex:
