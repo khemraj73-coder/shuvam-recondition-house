@@ -45,6 +45,7 @@ BASE_DIR = os.path.dirname(sys.executable) if getattr(sys, "frozen", False) \
     else os.path.dirname(os.path.abspath(__file__))
 DATA_DIR = os.environ.get("SHUVAM_HOME", BASE_DIR)
 DB_FILE = os.path.join(DATA_DIR, "shuvam_glass_v6.db")
+DB = None  # global DBManager instance, set in ShuvamApp.__init__
 CONFIG_FILE = os.path.join(DATA_DIR, "shuvam_config.json")
 RECEIPTS_DIR = os.path.join(DATA_DIR, "receipts")
 BACKUP_DIR = os.path.join(DATA_DIR, "backups")
@@ -1282,7 +1283,9 @@ def clear_tree(tree):
 class ShuvamApp(ctk.CTk):
     def __init__(self):
         super().__init__()
+        global DB
         self.db = DBManager(DB_FILE)
+        DB = self.db
         try:
             self.db.auto_backup()
         except Exception:
@@ -3030,7 +3033,11 @@ class TursoClient:
 
 # ---- snapshot export/restore ----
 def export_snapshot(db=None):
-    db = db or DB
+    global DB
+    if db is None:
+        if DB is None:
+            DB = DBManager(DB_FILE)
+        db = DB
     tables = {}
     with db.get_conn() as conn:
         for t in SNAPSHOT_TABLES:
@@ -3042,7 +3049,11 @@ def export_snapshot(db=None):
             "created_at": datetime.now().isoformat(timespec="seconds"), "tables": tables}
 
 def restore_snapshot(data, db=None, actor="cloud"):
-    db = db or DB
+    global DB
+    if db is None:
+        if DB is None:
+            DB = DBManager(DB_FILE)
+        db = DB
     if not isinstance(data, dict) or data.get("format") != 1 or not isinstance(data.get("tables"), dict):
         raise ValueError("Snapshot format invalid")
     tables = data["tables"]
@@ -3106,18 +3117,23 @@ def save_cloud_config(cfg):
         json.dump(out, f, indent=2, ensure_ascii=False)
     os.replace(tmp, CLOUD_FILE)
 
-def cloud_push(cfg=None):
+def cloud_push(cfg=None, db=None):
     cfg = cfg or load_cloud_config()
     client = TursoClient(cfg.get("url"), cfg.get("token"))
-    snap = export_snapshot()
+    snap = export_snapshot(db)
     # store snapshot as encrypted-ish JSON in vault table (create if missing)
     try:
-        client.execute(f"CREATE TABLE IF NOT EXISTS {TURSO_VAULT_TABLE} (id INTEGER PRIMARY KEY, payload TEXT, created_at TEXT)")
+        client.execute(f"CREATE TABLE IF NOT EXISTS {TURSO_VAULT_TABLE} (id INTEGER PRIMARY KEY, payload TEXT)")
     except Exception:
         pass
     payload = json.dumps(snap, ensure_ascii=False)
-    client.execute(f"INSERT INTO {TURSO_VAULT_TABLE} (payload, created_at) VALUES (?, ?)",
-                   (payload, datetime.now().isoformat(timespec="seconds")))
+    res = client.execute(f"INSERT INTO {TURSO_VAULT_TABLE} (payload) VALUES (?)", (payload,))
+    # surface Turso errors
+    try:
+        if isinstance(res, dict) and res.get("results") and res["results"][0].get("type") == "error":
+            raise RuntimeError(res["results"][0].get("error", {}).get("message", "Turso insert failed"))
+    except RuntimeError:
+        raise
     cfg["last_sync"] = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     save_cloud_config(cfg)
     return cfg["last_sync"]
@@ -3136,9 +3152,24 @@ def cloud_pull(cfg=None, db=None):
         rows = []
     if not rows:
         raise ValueError("No cloud snapshot found")
-    payload = rows[0][0] if isinstance(rows[0], list) else rows[0].get("payload")
-    if isinstance(payload, dict):
-        payload = payload.get("value", payload)
+    row0 = rows[0]
+    if isinstance(row0, list):
+        cell = row0[0] if row0 else None
+    elif isinstance(row0, dict):
+        cell = row0.get("payload") or row0.get("value")
+    else:
+        cell = row0
+    if isinstance(cell, dict):
+        cell = cell.get("value", cell)
+    payload = cell
+    if isinstance(payload, (bytes, bytearray)):
+        payload = payload.decode("utf-8", "replace")
+    payload = str(payload or "").strip()
+    # payload may be DPAPI-encrypted (legacy glass app) -> try decrypt
+    try:
+        payload = dpapi_unprotect_text(payload)
+    except Exception:
+        pass
     data = json.loads(payload)
     n = restore_snapshot(data, db, actor="cloud")
     cfg["last_sync"] = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
