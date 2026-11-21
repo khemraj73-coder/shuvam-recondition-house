@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-SHUVAM RECONDITION HOUSE — ULTIMATE v10.1.0 (single-file, stdlib-only)
+SHUVAM RECONDITION HOUSE — ULTIMATE v10.1.1 (single-file, stdlib-only)
 Design & Developed by Khemraj Bhattarai | KRB STUDIO
 चलाउने:  python shuvam_ultimate.py
 परीक्षण: python shuvam_ultimate.py --test          (offline)
@@ -32,7 +32,7 @@ except ImportError:
 # ══════════════ १. CONSTANTS ══════════════
 APP_NAME = "SHUVAM RECONDITION HOUSE"
 APP_CODE = "ULTIMATE"
-APP_VER = "10.1.0"
+APP_VER = "10.1.1"
 BRAND = "Design & Developed by Khemraj Bhattarai · KRB STUDIO · khemraj73@gmail.com"
 CUR = "Rs. "
 PAGE_LIMIT = 300
@@ -1151,10 +1151,12 @@ class TursoClient:
         return [[(c or {}).get("value") for c in row] for row in r.get("rows", []) or []]
     def ping(self): self.query("SELECT 1")
 def cloud_cfg():
+    if os.environ.get("SHUVAM_NO_CLOUD") == "1":
+        return {"url": TURSO_URL_ULTIMATE, "token": TURSO_TOKEN_ULTIMATE, "on": False}
     cfg = {"url": TURSO_URL_ULTIMATE, "token": TURSO_TOKEN_ULTIMATE, "on": True}
     try:
         if CLOUD_FILE.exists():
-            raw = json.loads(CLOUD_FILE.read_text(encoding="utf-8"))
+            raw = json.loads(CLOUD_FILE.read_text(encoding="utf-8-sig"))
             cfg["url"] = raw.get("url", cfg["url"]); cfg["on"] = bool(raw.get("on", cfg["on"]))
             if raw.get("token_enc") and dpapi_ok():
                 cfg["token"] = dp_decrypt(raw["token_enc"]).decode()
@@ -1216,23 +1218,54 @@ def update_check(url):
     if remote and ver_tuple(remote) > ver_tuple(APP_VER):
         raw["version"] = remote; return raw
     return None
+def update_skipped_ver():
+    try: return str(json.loads((DATA / "update_skip.json").read_text(encoding="utf-8-sig")).get("version") or "")
+    except Exception: return ""
+def set_update_skipped(v):
+    try:
+        (DATA / "update_skip.json").write_text(json.dumps({"version": str(v or "")}), encoding="utf-8")
+    except Exception: log.exception("update skip save")
 def update_install(info):
     info = info or {}
-    expected = (info.get("sha256") or "").strip().lower()
-    if not expected: raise ValueError("sha256 अनिवार्य — नभए install हुँदैन")
-    url = info.get("url")
-    if not url: raise ValueError("update url छैन")
-    data = _http_get(url, timeout=60)
-    if hashlib.sha256(data).hexdigest() != expected: raise ValueError("Checksum मिलेन — update रोकियो")
-    if getattr(sys, "frozen", False):
+    frozen = bool(getattr(sys, "frozen", False))
+    if frozen:
+        url = (info.get("exe_url") or info.get("url") or "").strip()
+        expected = (info.get("exe_sha256") or info.get("sha256") or "").strip().lower()
+        if not url.lower().split("?")[0].endswith(".exe"):
+            raise ValueError("Packaged app का लागि .exe update URL चाहिन्छ")
+    else:
+        url = (info.get("py_url") or info.get("url") or "").strip()
+        expected = (info.get("py_sha256") or info.get("sha256") or "").strip().lower()
+        if not url.lower().split("?")[0].endswith(".py"):
+            raise ValueError("Source app का लागि .py update URL चाहिन्छ")
+    if not expected:
+        raise ValueError("sha256 अनिवार्य — नभए install हुँदैन")
+    if not url:
+        raise ValueError("update url छैन")
+    data = _http_get(url, timeout=120 if frozen else 60)
+    if hashlib.sha256(data).hexdigest() != expected:
+        raise ValueError("Checksum मिलेन — update रोकियो")
+    if frozen:
+        if len(data) < 1_000_000 or data[:2] != b"MZ":
+            raise ValueError("डाउनलोड EXE फाइल मिलेन — update रोकियो")
         target = Path(sys.executable); new = target.with_suffix(".new.exe"); new.write_bytes(data)
-        bat = Path(tempfile.gettempdir()) / f"shuvam_upd_{int(time.time())}.bat"
-        bat.write_text("@echo off\r\ntimeout /t 2 /nobreak >nul\r\n"
-                       f'copy /y "{new}" "{target}" >nul\r\nstart "" "{target}"\r\ndel "%~f0"\r\n',
-                       encoding="ascii", errors="ignore")
-        subprocess.Popen(["cmd", "/c", str(bat)], creationflags=0x08000008, close_fds=True)
-        return "Update भयो — app restart हुँदैछ"
+        ps = Path(tempfile.gettempdir()) / f"shuvam_upd_{int(time.time())}.ps1"
+        def q(p): return "'" + str(p).replace("'", "''") + "'"
+        ps.write_text(
+            f"$ErrorActionPreference='SilentlyContinue'\n"
+            f"Wait-Process -Id {os.getpid()} -Timeout 60\n"
+            f"Start-Sleep -Milliseconds 600\n"
+            f"Copy-Item -LiteralPath {q(new)} -Destination {q(target)} -Force\n"
+            f"Start-Process -FilePath {q(target)}\n"
+            f"Remove-Item -LiteralPath $MyInvocation.MyCommand.Path -Force\n",
+            encoding="utf-8-sig")
+        subprocess.Popen(["powershell.exe", "-NoProfile", "-ExecutionPolicy", "Bypass",
+                          "-WindowStyle", "Hidden", "-File", str(ps)],
+                         creationflags=0x08000000, close_fds=True)
+        return "Update तयार — app आफै बन्द भएर नयाँ version खुल्नेछ"
     target = Path(__file__).resolve()
+    if b"APP_VER" not in data:
+        raise ValueError("डाउनलोड Python फाइल मिलेन — update रोकियो")
     target.with_suffix(f".bak-{datetime.now():%Y%m%d_%H%M%S}.py").write_bytes(target.read_bytes())
     tmp = target.with_suffix(".upd.tmp"); tmp.write_bytes(data); os.replace(tmp, target)
     return f"v{info.get('version')} install भयो — app पुनः सुरु गर्नुहोस्"
@@ -1324,10 +1357,20 @@ if HAS_TK:
             bgk, fgk = self.KINDS.get(kind, self.KINDS["primary"])
             bg = getattr(T, bgk)
             fg = fgk if str(fgk).startswith("#") else getattr(T, fgk)
+            font = F(9 if small else 10, "bold")
+            pad = 12 if small else 18
+            # width लाई pixel मा बुझिन्छ (Tk को character-width होइन)
+            width = 0
+            if w:
+                try:
+                    cw = max(1, tkfont.Font(font=font).measure("0"))
+                    width = max(1, (max(1, int(w) - 2 * pad)) // cw)
+                except Exception:
+                    width = max(1, int(w) // 9)
             super().__init__(parent, text=text, command=cmd, bg=bg, fg=fg,
                              activebackground=mix(bg, "#FFFFFF", .15), activeforeground=fg,
-                             font=F(9 if small else 10, "bold"), bd=0, relief="flat", cursor="hand2",
-                             padx=12 if small else 18, pady=6 if small else 9, width=w)
+                             font=font, bd=0, relief="flat", cursor="hand2",
+                             padx=pad, pady=6 if small else 9, width=width)
             self._bg = bg
             self.bind("<Enter>", lambda e: self.config(bg=mix(self._bg, "#FFFFFF", .12)))
             self.bind("<Leave>", lambda e: self.config(bg=self._bg))
@@ -1344,12 +1387,16 @@ if HAS_TK:
         def __init__(self, parent, label, width=24, bg=None, default="", show=None):
             bg = bg or T.PANEL
             super().__init__(parent, bg=bg)
-            tk.Label(self, text=label, bg=bg, fg=T.MUTED, font=F(8, "bold")).pack(anchor="w")
+            lbl = tk.Label(self, text=label, bg=bg, fg=T.MUTED, font=F(8, "bold"))
+            lbl.pack(anchor="w")
             wrap = tk.Frame(self, bg=T.LINE, padx=1, pady=1); wrap.pack(fill="x")
             self.e = tk.Entry(wrap, width=width, font=F(10), bg=T.FIELD, fg=T.INK, relief="flat",
-                              insertbackground=T.ACCENT, show=show or "")
+                              insertbackground=T.ACCENT, insertwidth=2, show=show or "")
             self.e.pack(fill="x", ipady=5, padx=4)
             if default != "": self.e.insert(0, str(default))
+            # लेबल/बोर्डरमा क्लिक गर्दा पनि सिधै टाइप गर्न सकियोस्
+            for _w in (lbl, wrap, self.e):
+                _w.bind("<Button-1>", lambda e: self.e.focus_set(), add="+")
         def get(self): return self.e.get()
         def set(self, v): self.e.delete(0, "end"); self.e.insert(0, str(v))
     class Combo(tk.Frame):
@@ -1670,7 +1717,11 @@ if HAS_TK:
         def _shell(self):
             r = self.root
             r.title(f"{APP_NAME} · {APP_CODE} v{APP_VER}")
-            r.configure(bg=T.BG); r.geometry("1420x900"); r.minsize(1140, 720)
+            r.configure(bg=T.BG)
+            sw, sh = r.winfo_screenwidth(), r.winfo_screenheight()
+            w = min(1420, max(1080, sw - 60)); h = min(900, max(640, sh - 100))
+            r.geometry(f"{w}x{h}+{max((sw - w) // 2, 0)}+{max((sh - h - 80) // 2, 0)}")
+            r.minsize(min(1140, w), min(700, h))
             style_ttk()
             try:
                 p = make_icon()
@@ -1799,18 +1850,21 @@ if HAS_TK:
                 try:
                     url = db().val("SELECT update_url FROM settings WHERE id=1", (), UPDATE_URL_DEFAULT) or UPDATE_URL_DEFAULT
                     info = update_check(url)
-                    if info:
+                    if info and str(info.get("version")) != update_skipped_ver():
                         self.root.after(0, lambda: self._prompt_update(info))
                 except Exception:
                     log.exception("auto update check")
             threading.Thread(target=work, daemon=True).start()
         def _prompt_update(self, info):
-            if messagebox.askyesno("Update", f"नयाँ version {info.get('version')} उपलब्ध छ।\nInstall गर्ने?"):
-                try:
-                    msg = update_install(info)
-                    messagebox.showinfo("Update", msg)
-                except Exception as e:
-                    messagebox.showerror("Update", str(e))
+            if not messagebox.askyesno("Update", f"नयाँ version {info.get('version')} उपलब्ध छ।\nInstall गर्ने?"):
+                set_update_skipped(info.get("version")); return
+            try:
+                msg = update_install(info)
+                messagebox.showinfo("Update", msg)
+                if getattr(sys, "frozen", False):
+                    self.root.after(800, self.root.destroy)
+            except Exception as e:
+                messagebox.showerror("Update", str(e))
 
         # ---------- DASHBOARD ----------
         def pg_dash(self):
@@ -2892,7 +2946,7 @@ if HAS_TK:
             if not confirm(self.root, t("confirm"), "हालको डाटा प्रतिस्थापन हुन्छ।\nपहिले स्वतः backup बन्छ। अघि बढ्ने?"): return
             try:
                 if p.lower().endswith(".json"):
-                    n = restore(json.loads(Path(p).read_text(encoding="utf-8")))
+                    n = restore(json.loads(Path(p).read_text(encoding="utf-8-sig")))
                 else:
                     tmp = Store(Path(p))
                     with tmp.rd() as c:
@@ -2926,7 +2980,10 @@ if HAS_TK:
             def ok(info):
                 if not info: Toast.show(self.root, "✅ तपाईं latest मा", "ok"); return
                 if confirm(self.root, "Update", f"v{info.get('version')} उपलब्ध। Install गर्ने?"):
-                    try: messagebox.showinfo("Update", update_install(info), parent=self.root)
+                    try:
+                        messagebox.showinfo("Update", update_install(info), parent=self.root)
+                        if getattr(sys, "frozen", False):
+                            self.root.after(800, self.root.destroy)
                     except Exception as e: messagebox.showerror("Update", str(e), parent=self.root)
         def _silent_cloud_sync(self):
             def work():
@@ -2970,8 +3027,11 @@ if HAS_TK:
         clear_root(root)
         s = db().one("SELECT * FROM settings WHERE id=1")
         apply_theme(s["theme"] or "porcelain"); style_ttk()
-        root.title(f"{APP_NAME} — {t('login')}"); root.geometry("980x620")
-        root.resizable(False, False); root.configure(bg=T.BG)
+        root.title(f"{APP_NAME} — {t('login')}"); root.resizable(False, False)
+        root.configure(bg=T.BG)
+        root.update_idletasks()
+        sw, sh = root.winfo_screenwidth(), root.winfo_screenheight()
+        root.geometry(f"980x620+{max((sw - 980) // 2, 0)}+{max((sh - 620) // 3, 0)}")
         left = tk.Frame(root, bg=T.RAIL, width=420); left.pack(side="left", fill="y"); left.pack_propagate(False)
         inner = tk.Frame(left, bg=T.RAIL); inner.place(relx=.5, rely=.5, anchor="center")
         tk.Label(inner, text="SHUVAM", bg=T.RAIL, fg="#FFFFFF", font=F(38, "bold")).pack()
@@ -3038,11 +3098,17 @@ if HAS_TK:
         lb = tk.Label(box, text="EN" if _lang == "ne" else "नेपाली", bg=T.BG, fg=T.ACCENT, font=F(9, "bold"), cursor="hand2")
         lb.pack(anchor="e", pady=(14, 0))
         lb.bind("<Button-1>", lambda e: (set_lang("en" if _lang == "ne" else "ne"), login_screen(root)))
-        root.after(220, fu.e.focus_set)
+        def _focus():
+            try:
+                root.deiconify(); root.lift(); root.focus_force(); fu.e.focus_set()
+            except Exception: pass
+        root.after(120, _focus)
+        root.after(450, _focus)
     def setup_screen(root):
         clear_root(root); apply_theme("porcelain"); style_ttk()
-        root.title(f"{APP_NAME} — पहिलो सेटअप"); root.geometry("720x640")
-        root.resizable(False, False); root.configure(bg=T.BG)
+        root.title(f"{APP_NAME} — पहिलो सेटअप"); root.resizable(False, False); root.configure(bg=T.BG)
+        sw, sh = root.winfo_screenwidth(), root.winfo_screenheight()
+        root.geometry(f"720x640+{max((sw - 720) // 2, 0)}+{max((sh - 640) // 2 - 20, 0)}")
         c = Card(root, pad=28, accent=T.ACCENT); c.place(relx=.5, rely=.5, anchor="center", width=520)
         tk.Label(c.body, text="👋 स्वागत छ!", bg=T.PANEL, fg=T.INK, font=F(24, "bold")).pack(anchor="w")
         tk.Label(c.body, text=f"{APP_CODE} v{APP_VER} — पहिलो Owner खाता बनाउनुहोस्", bg=T.PANEL,
@@ -3065,6 +3131,11 @@ if HAS_TK:
             except Exception as e: msg.config(text=str(e))
         Btn(c.body, "✅ सेटअप पूरा", go, "ok", w=440).pack(pady=(12, 0))
         tk.Label(c.body, text=BRAND, bg=T.PANEL, fg=T.FAINT, font=F(7)).pack(pady=(14, 0))
+        def _focus_setup():
+            try:
+                root.lift(); root.focus_force(); f["user"].e.focus_force()
+            except Exception: pass
+        root.after(150, _focus_setup)
     def launch():
         root = tk.Tk(); pick_font(root)
         s = db().one("SELECT theme,lang FROM settings WHERE id=1")
@@ -3267,6 +3338,14 @@ def run_tests():
         assert (PHOTO_DIR / name).is_file()
         assert photo_uri(name).startswith("data:image/png;base64,")
     check("१६. photo save + data URI", t_photo)
+    def t_update_guard():
+        try:
+            update_install({})
+        except ValueError as e:
+            assert "sha256" in str(e) or "URL" in str(e)
+        else:
+            raise AssertionError("खाली update info स्वीकृत भयो")
+    check("१७. update checksum guard", t_update_guard)
     print("-" * 68); print(f"नतिजा: {len(ok)} सफल · {len(bad)} असफल"); print("=" * 68)
     for n, e in bad: print(f"  ✗ {n}: {e}")
     return not bad
