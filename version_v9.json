@@ -1,6 +1,6 @@
 {
-  "version": "9.0.1",
+  "version": "9.0.2",
   "url": "https://raw.githubusercontent.com/khemraj73-coder/shuvam-recondition-house/main/shuvam_v9.py",
-  "notes": "SHUVAM v9.0.1 - cloud sync fix (Turso INSERT + payload decrypt), PAN/shop settings, offline retry.",
+  "notes": "SHUVAM v9.0.2 - accessories (helmet) + number plates + sell bike integration + settings reorg + cloud sync fix.",
   "sha256": ""
 }

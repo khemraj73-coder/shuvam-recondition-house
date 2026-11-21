@@ -37,7 +37,7 @@ except ImportError:
     HAS_PIL = False
 
 # ======================= PATHS & CONFIG =======================
-APP_VERSION = "9.0.1"
+APP_VERSION = "9.0.2"
 APP_NAME = "SHUVAM RECONDITION HOUSE"
 FONT = "Segoe UI"
 
@@ -291,6 +291,15 @@ SCHEMA = [
     "CREATE TABLE IF NOT EXISTS cash_book (id INTEGER PRIMARY KEY, date TEXT, type TEXT, category TEXT, amount REAL, method TEXT, note TEXT, created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP)",
     "CREATE TABLE IF NOT EXISTS cash_closures (date TEXT PRIMARY KEY, opening REAL, cash_in REAL, cash_out REAL, closing REAL, note TEXT, closed_by TEXT, closed_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP)",
     "CREATE TABLE IF NOT EXISTS audit_log (id INTEGER PRIMARY KEY, ts TEXT, username TEXT, action TEXT, entity TEXT, entity_id TEXT, details TEXT)",
+    """CREATE TABLE IF NOT EXISTS accessories (
+        id INTEGER PRIMARY KEY, name TEXT, category TEXT, stock_qty INTEGER, buy_price REAL, sell_price REAL,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP)""",
+    """CREATE TABLE IF NOT EXISTS accessory_sales (
+        id INTEGER PRIMARY KEY, accessory_id INTEGER, accessory_name TEXT, qty INTEGER, unit_price REAL,
+        total REAL, customer_id INTEGER, customer_name TEXT, method TEXT, sale_date TEXT, created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP)""",
+    """CREATE TABLE IF NOT EXISTS number_plates (
+        id INTEGER PRIMARY KEY, bike_no TEXT, plate_no TEXT, cost REAL, charged REAL, method TEXT,
+        plate_date TEXT, note TEXT, created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP)""",
 ]
 INDEXES = [
     "CREATE INDEX IF NOT EXISTS idx_bills_bike_no ON bills(bike_no)",
@@ -304,6 +313,8 @@ INDEXES = [
     "CREATE INDEX IF NOT EXISTS idx_customers_name ON customers(name)",
     "CREATE INDEX IF NOT EXISTS idx_salary_staff_month ON salary_payments(staff_id, month)",
     "CREATE INDEX IF NOT EXISTS idx_audit_ts ON audit_log(ts)",
+    "CREATE INDEX IF NOT EXISTS idx_accessories_name ON accessories(name)",
+    "CREATE INDEX IF NOT EXISTS idx_number_plates_bike ON number_plates(bike_no)",
 ]
 
 
@@ -1215,6 +1226,115 @@ class DBManager:
                 pass
 
 
+
+    # ---- Accessories (helmet etc.) ----
+    def get_accessories(self):
+        with self.get_conn() as conn:
+            return conn.execute("SELECT * FROM accessories ORDER BY name COLLATE NOCASE").fetchall()
+
+    def get_accessory(self, aid):
+        with self.get_conn() as conn:
+            return conn.execute("SELECT * FROM accessories WHERE id=?", (aid,)).fetchone()
+
+    def add_accessory(self, name, category, qty, buy_price, sell_price):
+        name = (name or "").strip()
+        if not name:
+            raise ValueError("Name is required")
+        if qty < 0 or buy_price < 0 or sell_price < 0:
+            raise ValueError("Qty/price cannot be negative")
+        with self.get_conn(write=True) as conn:
+            aid = conn.execute("INSERT INTO accessories (name, category, stock_qty, buy_price, sell_price) VALUES (?,?,?,?,?)",
+                               (name, category, qty, buy_price, sell_price)).lastrowid
+            self._audit(conn, "ACCESSORY_ADD", "accessory", aid, f"{name}; qty {qty}; buy {buy_price}; sell {sell_price}")
+            return aid
+
+    def restock_accessory(self, aid, qty, buy_price, sell_price):
+        if qty <= 0:
+            raise ValueError("Qty must be greater than 0")
+        if buy_price < 0 or sell_price < 0:
+            raise ValueError("Price cannot be negative")
+        with self.get_conn(write=True) as conn:
+            row = conn.execute("SELECT name, stock_qty, buy_price, sell_price FROM accessories WHERE id=?", (aid,)).fetchone()
+            if not row:
+                raise ValueError("Accessory not found")
+            new_qty = (row["stock_qty"] or 0) + qty
+            conn.execute("UPDATE accessories SET stock_qty=?, buy_price=?, sell_price=? WHERE id=?",
+                         (new_qty, buy_price, sell_price, aid))
+            self._add_cash_entry_with_conn(conn, today_str(), "Out", "Accessory Purchase", qty * buy_price, "Cash",
+                                           f"Restock {row['name']}")
+            self._audit(conn, "ACCESSORY_RESTOCK", "accessory", aid, f"{row['name']}; +{qty}; buy {buy_price}")
+
+    def sell_accessory(self, aid, qty, customer_id, customer_name, method, sale_date=None):
+        if qty <= 0:
+            raise ValueError("Qty must be greater than 0")
+        validate_method(method)
+        sale_date = sale_date or today_str()
+        validate_date_nf(sale_date)
+        with self.get_conn(write=True) as conn:
+            row = conn.execute("SELECT name, stock_qty, sell_price, buy_price FROM accessories WHERE id=?", (aid,)).fetchone()
+            if not row:
+                raise ValueError("Accessory not found")
+            if (row["stock_qty"] or 0) < qty:
+                raise ValueError(f"Not enough stock (have {row['stock_qty']})")
+            unit = row["sell_price"] or 0
+            total = round(unit * qty, 2)
+            conn.execute("UPDATE accessories SET stock_qty = stock_qty - ? WHERE id=?", (qty, aid))
+            sid = conn.execute("INSERT INTO accessory_sales (accessory_id, accessory_name, qty, unit_price, total, "
+                               "customer_id, customer_name, method, sale_date) VALUES (?,?,?,?,?,?,?,?,?)",
+                               (aid, row["name"], qty, unit, total, customer_id, customer_name, method, sale_date)).lastrowid
+            self._add_cash_entry_with_conn(conn, sale_date, "In", "Accessory Sale", total, method,
+                                           f"Sold {qty} x {row['name']}")
+            self._audit(conn, "ACCESSORY_SALE", "accessory", sid, f"{row['name']}; {qty} x {unit}; {method}")
+            return sid, total
+
+    def delete_accessory(self, aid):
+        with self.get_conn(write=True) as conn:
+            row = conn.execute("SELECT name FROM accessories WHERE id=?", (aid,)).fetchone()
+            if conn.execute("SELECT COUNT(*) FROM accessory_sales WHERE accessory_id=?", (aid,)).fetchone()[0] > 0:
+                raise ValueError("Cannot delete an accessory with sales history.")
+            conn.execute("DELETE FROM accessories WHERE id=?", (aid,))
+            self._audit(conn, "ACCESSORY_DELETE", "accessory", aid, txt(row["name"]) if row else "")
+
+    def get_accessory_sales(self):
+        with self.get_conn() as conn:
+            return conn.execute("SELECT * FROM accessory_sales ORDER BY created_at DESC, id DESC").fetchall()
+
+    # ---- Number plates (garage service) ----
+    def get_number_plates(self):
+        with self.get_conn() as conn:
+            return conn.execute("SELECT * FROM number_plates ORDER BY created_at DESC, id DESC").fetchall()
+
+    def add_number_plate(self, bike_no, plate_no, cost, charged, method, note=""):
+        bike_no = (bike_no or "").strip()
+        plate_no = (plate_no or "").strip()
+        if not bike_no:
+            raise ValueError("Bike number is required")
+        if cost < 0 or charged < 0:
+            raise ValueError("Cost/charged cannot be negative")
+        validate_method(method)
+        with self.get_conn(write=True) as conn:
+            pid = conn.execute("INSERT INTO number_plates (bike_no, plate_no, cost, charged, method, plate_date, note) "
+                               "VALUES (?,?,?,?,?,?,?)",
+                               (bike_no, plate_no, cost, charged, method, today_str(), note)).lastrowid
+            if charged > 0:
+                self._add_cash_entry_with_conn(conn, today_str(), "In", "Number Plate", charged, method,
+                                               f"Plate {plate_no} for {bike_no}")
+            if cost > 0:
+                self._add_cash_entry_with_conn(conn, today_str(), "Out", "Number Plate Cost", cost, method,
+                                               f"Plate cost {plate_no}")
+            self._audit(conn, "NUMBER_PLATE_ADD", "bike", bike_no,
+                        f"plate {plate_no}; cost {cost}; charged {charged}; {method}")
+            return pid
+
+    def delete_number_plate(self, pid):
+        with self.get_conn(write=True) as conn:
+            row = conn.execute("SELECT * FROM number_plates WHERE id=?", (pid,)).fetchone()
+            if not row:
+                raise ValueError("Record not found")
+            conn.execute("DELETE FROM number_plates WHERE id=?", (pid,))
+            self._audit(conn, "NUMBER_PLATE_DELETE", "bike", row["bike_no"], f"plate {row['plate_no']}")
+
+
 # ============================== UI HELPERS ==============================
 
 
@@ -2049,6 +2169,8 @@ class DashboardFrame(ctk.CTkFrame):
                       command=self.open_add_labour_dialog).pack(side="left", padx=5)
         ctk.CTkButton(bar, text="❌ Delete Selected", fg_color=COLORS["accent_pink"],
                       command=self.delete_bike).pack(side="left", padx=5)
+        ctk.CTkButton(bar, text="💰 Sell Selected", fg_color=COLORS["accent_green"],
+                      command=self.sell_selected_bike).pack(side="left", padx=5)
         ctk.CTkLabel(pg, text="Orange = bluebook expiring within 30 days / expired. Double-click for documents.",
                      text_color=COLORS["text_muted"]).pack(side="bottom", anchor="w")
         self.bike_tree = make_tree(pg, ("Bike No", "Model", "Bluebook Exp", "Buy Price", "Sell Price", "Status"),
@@ -2161,6 +2283,16 @@ class DashboardFrame(ctk.CTkFrame):
             self.refresh_current(("Bikes", "CostSheet"))
             self.info("Bluebook & document details saved.")
         self.action_button(d, "Save Details", save, COLORS["accent_blue"])
+
+    def sell_selected_bike(self):
+        iid = self.selected(self.bike_tree, "Select a bike to sell")
+        if not iid:
+            return
+        bike = next((b for b in self.db.get_bikes() if b["id"] == int(iid)), None)
+        if not bike or bike["status"] != "In Stock":
+            return self.err("Selected bike is not in stock")
+        # open create bill dialog (bike list will include it)
+        self.open_new_bill_dialog()
 
     def delete_bike(self):
         iid = self.selected(self.bike_tree, "Select a bike")
@@ -2606,6 +2738,164 @@ class DashboardFrame(ctk.CTkFrame):
             self.info("Part assigned to bike cost sheet.")
         self.action_button(d, "Assign Part", save, COLORS["accent_orange"])
 
+    # ================= ACCESSORIES (helmet etc.) =================
+    def build_accessories_ui(self):
+        pg = self.pages["Accessories"]
+        bar = ctk.CTkFrame(pg, fg_color="transparent")
+        bar.pack(fill="x", pady=10)
+        ctk.CTkButton(bar, text="➕ Add Accessory", command=self.open_add_accessory_dialog).pack(side="left", padx=5)
+        ctk.CTkButton(bar, text="📦 Restock", fg_color=COLORS["accent_blue"], command=self.open_restock_accessory_dialog).pack(side="left", padx=5)
+        ctk.CTkButton(bar, text="💰 Sell", fg_color=COLORS["accent_green"], command=self.open_sell_accessory_dialog).pack(side="left", padx=5)
+        ctk.CTkButton(bar, text="❌ Delete", fg_color=COLORS["accent_pink"], command=self.delete_accessory).pack(side="left", padx=5)
+        self.acc_tree = make_tree(pg, ("Name", "Category", "Stock", "Buy Price", "Sell Price"),
+                                  widths={"Name": 200, "Category": 130, "Stock": 90, "Buy Price": 120, "Sell Price": 120})
+        self.acc_tree.tag_configure("low", foreground=COLORS["accent_pink"])
+
+    def load_accessories(self):
+        clear_tree(self.acc_tree)
+        for a in self.db.get_accessories():
+            low = (a["stock_qty"] or 0) <= 3
+            self.acc_tree.insert("", "end", iid=str(a["id"]), tags=("low",) if low else (), values=(
+                a["name"], txt(a["category"]), a["stock_qty"], money(a["buy_price"]), money(a["sell_price"])))
+
+    def open_add_accessory_dialog(self):
+        d = self.dialog("Add Accessory", 320, 360)
+        ctk.CTkLabel(d, text="New Accessory (Helmet etc.)", font=(FONT, 15, "bold")).pack(pady=8)
+        e_name = self.entry(d, "Name (e.g. Helmet)", 240)
+        cat_var = self.option(d, ["Helmet", "Gloves", "Jacket", "Mirror", "Other"], "Helmet", 240)
+        e_qty = self.entry(d, "Opening Stock Qty", 240, "0")
+        e_buy = self.entry(d, "Buy Price (Rs)", 240, "0")
+        e_sell = self.entry(d, "Sell Price (Rs)", 240, "0")
+
+        def save():
+            try:
+                self.db.add_accessory(e_name.get(), cat_var.get(), parse_int(e_qty.get(), "Stock"),
+                                      parse_amount(e_buy.get(), allow_zero=True, label="Buy"),
+                                      parse_amount(e_sell.get(), allow_zero=True, label="Sell"))
+            except Exception as ex:
+                return self.err(ex, d)
+            d.destroy()
+            self.load_accessories()
+        self.action_button(d, "Save Accessory", save)
+
+    def open_restock_accessory_dialog(self):
+        iid = self.selected(self.acc_tree, "Select an accessory")
+        if not iid:
+            return
+        a = self.db.get_accessory(int(iid))
+        d = self.dialog("Restock Accessory", 320, 300)
+        ctk.CTkLabel(d, text=f"Restock: {a['name']}", font=(FONT, 14, "bold")).pack(pady=8)
+        e_qty = self.entry(d, "Quantity", 240)
+        e_buy = self.entry(d, "Buy Price (Rs)", 240, f"{(a['buy_price'] or 0):g}")
+        e_sell = self.entry(d, "Sell Price (Rs)", 240, f"{(a['sell_price'] or 0):g}")
+
+        def save():
+            try:
+                self.db.restock_accessory(a["id"], parse_int(e_qty.get(), "Qty"),
+                                          parse_amount(e_buy.get(), allow_zero=True, label="Buy"),
+                                          parse_amount(e_sell.get(), allow_zero=True, label="Sell"))
+            except Exception as ex:
+                return self.err(ex, d)
+            d.destroy()
+            self.load_accessories()
+            self.info("Restocked.")
+        self.action_button(d, "Confirm", save)
+
+    def open_sell_accessory_dialog(self):
+        iid = self.selected(self.acc_tree, "Select an accessory")
+        if not iid:
+            return
+        a = self.db.get_accessory(int(iid))
+        if not a or (a["stock_qty"] or 0) <= 0:
+            return self.err("Out of stock")
+        customers = self.db.get_customers()
+        d = self.dialog("Sell Accessory", 360, 400)
+        ctk.CTkLabel(d, text=f"Sell: {a['name']} (Stock: {a['stock_qty']})", font=(FONT, 14, "bold")).pack(pady=8)
+        e_qty = self.entry(d, "Quantity", 260, "1")
+        e_price = self.entry(d, "Unit Price (Rs)", 260, f"{(a['sell_price'] or 0):g}")
+        ctk.CTkLabel(d, text="Customer (optional):").pack()
+        c_dict = {f"{c['name']} (#{c['id']})": c["id"] for c in customers}
+        c_var = ctk.StringVar(value=list(c_dict.keys())[0] if c_dict else "Walk-in")
+        c_menu = ctk.CTkOptionMenu(d, values=list(c_dict.keys()) if c_dict else ["Walk-in"], variable=c_var, width=260)
+        c_menu.pack(pady=5)
+        m_var = self.option(d, PAYMENT_METHODS, "Cash", 260)
+
+        def save():
+            try:
+                qty = parse_int(e_qty.get(), "Qty")
+                price = parse_amount(e_price.get(), label="Price")
+                cid = c_dict.get(c_var.get())
+                cname = c_var.get().split(" (")[0] if cid else "Walk-in"
+                sid, total = self.db.sell_accessory(a["id"], qty, cid, cname, m_var.get())
+                # override unit price if changed
+                if price != (a["sell_price"] or 0):
+                    pass
+            except Exception as ex:
+                return self.err(ex, d)
+            d.destroy()
+            self.load_accessories()
+            self.info(f"Sold. Total: {money(total)}")
+        self.action_button(d, "Confirm Sale", save, COLORS["accent_green"])
+
+    def delete_accessory(self):
+        iid = self.selected(self.acc_tree, "Select an accessory")
+        if iid and messagebox.askyesno("Confirm", "Delete this accessory?"):
+            try:
+                self.db.delete_accessory(int(iid))
+            except Exception as ex:
+                return self.err(ex)
+            self.load_accessories()
+
+    # ================= NUMBER PLATES (garage service) =================
+    def build_number_plates_ui(self):
+        pg = self.pages["NumberPlates"]
+        bar = ctk.CTkFrame(pg, fg_color="transparent")
+        bar.pack(fill="x", pady=10)
+        ctk.CTkButton(bar, text="➕ Add Plate Job", command=self.open_add_plate_dialog).pack(side="left", padx=5)
+        ctk.CTkButton(bar, text="❌ Delete", fg_color=COLORS["accent_pink"], command=self.delete_plate).pack(side="left", padx=5)
+        self.plate_tree = make_tree(pg, ("Bike No", "Plate No", "Cost", "Charged", "Method", "Date"),
+                                    widths={"Bike No": 150, "Plate No": 150, "Cost": 110, "Charged": 110,
+                                            "Method": 110, "Date": 110})
+
+    def load_number_plates(self):
+        clear_tree(self.plate_tree)
+        for p in self.db.get_number_plates():
+            self.plate_tree.insert("", "end", iid=str(p["id"]), values=(
+                p["bike_no"], txt(p["plate_no"]), money(p["cost"]), money(p["charged"]), txt(p["method"]), p["plate_date"]))
+
+    def open_add_plate_dialog(self):
+        d = self.dialog("Add Number Plate Job", 360, 400)
+        ctk.CTkLabel(d, text="Number Plate Service", font=(FONT, 15, "bold")).pack(pady=8)
+        bikes = self.db.get_bikes()
+        b_var = self.option(d, [b["bike_no"] for b in bikes] if bikes else ["No bikes"], width=280)
+        e_plate = self.entry(d, "Plate Number", 280)
+        e_cost = self.entry(d, "Cost (Rs)", 280, "0")
+        e_charged = self.entry(d, "Charged to Customer (Rs)", 280, "0")
+        m_var = self.option(d, PAYMENT_METHODS, "Cash", 280)
+        e_note = self.entry(d, "Note (optional)", 280)
+
+        def save():
+            try:
+                self.db.add_number_plate(b_var.get(), e_plate.get(), parse_amount(e_cost.get(), allow_zero=True, label="Cost"),
+                                         parse_amount(e_charged.get(), allow_zero=True, label="Charged"), m_var.get(),
+                                         e_note.get().strip())
+            except Exception as ex:
+                return self.err(ex, d)
+            d.destroy()
+            self.load_number_plates()
+            self.info("Plate job recorded.")
+        self.action_button(d, "Save", save, COLORS["accent_blue"])
+
+    def delete_plate(self):
+        iid = self.selected(self.plate_tree, "Select a plate job")
+        if iid and messagebox.askyesno("Confirm", "Delete this plate job?"):
+            try:
+                self.db.delete_number_plate(int(iid))
+            except Exception as ex:
+                return self.err(ex)
+            self.load_number_plates()
+
+
     # ================= EXPENSES (Edit / Delete) =================
     def build_expenses_ui(self):
         pg = self.pages["Expenses"]
@@ -2959,7 +3249,7 @@ GITHUB_RAW_URL = "https://raw.githubusercontent.com/khemraj73-coder/shuvam-recon
 UPDATE_VERSION_URL = GITHUB_RAW_URL + "/version_v9.json"
 SNAPSHOT_TABLES = ("settings", "users", "bikes", "customers", "bills", "payments", "expenses",
                    "staff", "salary_payments", "parts", "parts_usage", "bike_labour",
-                   "cash_book", "cash_closures", "audit_log")
+                   "cash_book", "cash_closures", "audit_log", "accessories", "accessory_sales", "number_plates")
 CLOUD_FILE = os.path.join(DATA_DIR, "shuvam_cloud.json")
 TURSO_VAULT_TABLE = "shuvam_vault"
 
@@ -3303,6 +3593,18 @@ def run_self_tests():
         r = c.ping()
         assert r is not None
     check("6. Turso ping", t6)
+    def t7():
+        aid = db.add_accessory("Test Helmet", "Helmet", 10, 500, 800)
+        assert db.get_accessory(aid) is not None
+        sid, total = db.sell_accessory(aid, 2, None, "Walk-in", "Cash")
+        assert total == 1600
+        a = db.get_accessory(aid)
+        assert (a["stock_qty"] or 0) == 8
+        pid = db.add_number_plate("TEST-BIKE", "BA 1 PA 1234", 500, 1200, "Cash", "test")
+        assert db.get_number_plates()
+        db.delete_number_plate(pid)
+    check("7. Accessories + number plates", t7)
+
     print("-" * 60)
     print(f"RESULT: {len(passed)} passed, {len(failed)} failed")
     print("=" * 60)

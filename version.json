@@ -1,6 +1,6 @@
 {
-  "version": "9.0.0",
+  "version": "9.0.2",
   "url": "https://raw.githubusercontent.com/khemraj73-coder/shuvam-recondition-house/main/shuvam_v9.py",
-  "notes": "SHUVAM v9.0.0 - full management system + cloud sync + auto-update (replaces v5 glass app).",
+  "notes": "SHUVAM v9.0.2 - accessories + number plates + sell bike + settings + cloud sync fix.",
   "sha256": ""
 }
