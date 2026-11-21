@@ -1322,7 +1322,8 @@ if HAS_TK:
                  "warn": ("WARN", "#FFFFFF"), "ghost": ("FIELD", "INK"), "rail": ("RAIL_ACT", "#FFFFFF")}
         def __init__(self, parent, text, cmd, kind="primary", w=None, small=False):
             bgk, fgk = self.KINDS.get(kind, self.KINDS["primary"])
-            bg = getattr(T, bgk); fg = getattr(T, fgk)
+            bg = getattr(T, bgk)
+            fg = fgk if str(fgk).startswith("#") else getattr(T, fgk)
             super().__init__(parent, text=text, command=cmd, bg=bg, fg=fg,
                              activebackground=mix(bg, "#FFFFFF", .15), activeforeground=fg,
                              font=F(9 if small else 10, "bold"), bd=0, relief="flat", cursor="hand2",
@@ -2927,6 +2928,12 @@ if HAS_TK:
                 if confirm(self.root, "Update", f"v{info.get('version')} उपलब्ध। Install गर्ने?"):
                     try: messagebox.showinfo("Update", update_install(info), parent=self.root)
                     except Exception as e: messagebox.showerror("Update", str(e), parent=self.root)
+        def _silent_cloud_sync(self):
+            def work():
+                try:
+                    if cloud_cfg().get("on"): cloud_push()
+                except Exception: log.exception("silent cloud sync")
+            threading.Thread(target=work, daemon=True).start()
             self._bg(lambda: update_check(url), ok, lambda e: messagebox.showerror("Update", str(e), parent=self.root))
         def test_hello(self):
             def ok(res):
