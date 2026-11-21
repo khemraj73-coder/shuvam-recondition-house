@@ -37,7 +37,7 @@ except ImportError:
     HAS_PIL = False
 
 # ======================= PATHS & CONFIG =======================
-APP_VERSION = "9.0.0"
+APP_VERSION = "9.0.1"
 APP_NAME = "SHUVAM RECONDITION HOUSE"
 FONT = "Segoe UI"
 
@@ -3269,7 +3269,7 @@ def run_self_tests():
     print("Shuvam v9 - self test")
     print("=" * 60)
     def t1():
-        assert APP_VERSION == "9.0.0"
+        assert APP_VERSION.startswith("9.")
         assert APP_NAME == "SHUVAM RECONDITION HOUSE"
         assert len(PAYMENT_METHODS) >= 9
         for m in ("Cash", "eSewa", "Khalti", "ConnectIPS", "Bank Transfer", "Fonepay", "IME Pay", "Cheque", "Other"):
