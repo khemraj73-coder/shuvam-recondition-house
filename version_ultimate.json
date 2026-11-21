@@ -1,10 +1,10 @@
 {
-  "version": "10.1.1",
-  "url": "https://github.com/khemraj73-coder/shuvam-recondition-house/releases/download/v10.1.1/SHUVAM-Ultimate-v10.1.1-Setup.exe",
-  "exe_url": "https://github.com/khemraj73-coder/shuvam-recondition-house/releases/download/v10.1.1/SHUVAM-Ultimate-v10.1.1-Setup.exe",
-  "sha256": "F1A8E64FA6FE895F2D042A7FA38BB56CE03DD5F32BF66D71A2C3FAC7A5A4FE68",
-  "exe_sha256": "F1A8E64FA6FE895F2D042A7FA38BB56CE03DD5F32BF66D71A2C3FAC7A5A4FE68",
+  "version": "10.1.2",
+  "url": "https://github.com/khemraj73-coder/shuvam-recondition-house/releases/download/v10.1.2/SHUVAM-Ultimate-v10.1.2-Setup.exe",
+  "exe_url": "https://github.com/khemraj73-coder/shuvam-recondition-house/releases/download/v10.1.2/SHUVAM-Ultimate-v10.1.2-Setup.exe",
+  "sha256": "BE0D30CE6E20E8991659803D7D436A331DCF916114DE53A2B9CB6ACB606A36EA",
+  "exe_sha256": "BE0D30CE6E20E8991659803D7D436A331DCF916114DE53A2B9CB6ACB606A36EA",
   "py_url": "https://raw.githubusercontent.com/khemraj73-coder/shuvam-recondition-house/main/shuvam_ultimate.py",
-  "py_sha256": "33897b27054826802ff2b0d92d1fab927185100e1ced1db7fe7ae94c1e481052",
-  "notes": "SHUVAM ULTIMATE v10.1.1 — login screen layout & focus fix (buttons now pixel-accurate), window fits 1366x768 screens, safer auto-update (EXE-only, checksum verified), reminders not repeated, cloud config BOM-safe."
+  "py_sha256": "fab088f39df14adfe8bae79a60cf680bdcb881c7365f6cd21aead63ef42da682",
+  "notes": "SHUVAM ULTIMATE v10.1.2 - settings add/edit/clear + user delete + Turso/GitHub links, language toggle fix, BOM-safe cloud, MouseWheel cleanup, Toast safety."
 }

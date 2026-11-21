@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-SHUVAM RECONDITION HOUSE — ULTIMATE v10.1.1 (single-file, stdlib-only)
+SHUVAM RECONDITION HOUSE — ULTIMATE v10.1.2 (single-file, stdlib-only)
 Design & Developed by Khemraj Bhattarai | KRB STUDIO
 चलाउने:  python shuvam_ultimate.py
 परीक्षण: python shuvam_ultimate.py --test          (offline)
@@ -32,7 +32,7 @@ except ImportError:
 # ══════════════ १. CONSTANTS ══════════════
 APP_NAME = "SHUVAM RECONDITION HOUSE"
 APP_CODE = "ULTIMATE"
-APP_VER = "10.1.1"
+APP_VER = "10.1.2"
 BRAND = "Design & Developed by Khemraj Bhattarai · KRB STUDIO · khemraj73@gmail.com"
 CUR = "Rs. "
 PAGE_LIMIT = 300
@@ -426,6 +426,9 @@ class Store:
             for col, typ in (("photo_path", "TEXT DEFAULT ''"), ("engine_no", "TEXT DEFAULT ''"),
                              ("chassis_no", "TEXT DEFAULT ''"), ("bb_expiry", "TEXT DEFAULT ''")):
                 if col not in have: c.execute(f"ALTER TABLE bikes ADD COLUMN {col} {typ}")
+            have_s = {r[1] for r in c.execute("PRAGMA table_info(settings)")}
+            for col, typ in (("email", "TEXT DEFAULT ''"), ("website", "TEXT DEFAULT ''")):
+                if col not in have_s: c.execute(f"ALTER TABLE settings ADD COLUMN {col} {typ}")
     def _conn(self):
         c = sqlite3.connect(str(self.path), timeout=30)
         c.row_factory = sqlite3.Row
@@ -506,6 +509,18 @@ def user_add(u, p, role="staff"):
             db().audit(c, "USER_ADD", f"{u} ({role})")
     except sqlite3.IntegrityError:
         raise ValueError("Username पहिले नै छ") from None
+def user_delete(u, actor="system"):
+    u = (u or "").strip()
+    if not u: raise ValueError("Username खाली हुन सक्दैन")
+    r = db().one("SELECT role FROM users WHERE username=?", (u,))
+    if not r: raise ValueError("प्रयोगकर्ता भेटिएन")
+    if r["role"] == "owner":
+        owners = db().val("SELECT COUNT(*) FROM users WHERE role='owner'")
+        if owners <= 1: raise ValueError("कम्तीमा एक Owner राख्नुपर्छ")
+    if u == actor: raise ValueError("आफैलाई हटाउन मिल्दैन")
+    with db().tx() as c:
+        c.execute("DELETE FROM users WHERE username=?", (u,))
+        db().audit(c, "USER_DELETE", u)
 def authenticate(u, p):
     r = db().one("SELECT * FROM users WHERE username=?", ((u or "").strip(),))
     if not r: return None
@@ -1506,7 +1521,8 @@ if HAS_TK:
             win.geometry(f"{w}x{h}+{x}+30")
             try: win.attributes("-alpha", 0.96)
             except Exception: pass
-            win.after(dur, win.destroy)
+            try: win.after(dur, win.destroy)
+            except Exception: pass
     class Bars(tk.Canvas):
         def __init__(self, parent, h=200):
             super().__init__(parent, bg=T.PANEL, highlightthickness=0, height=h)
@@ -1761,7 +1777,7 @@ if HAS_TK:
             right = tk.Frame(b, bg=T.BG); right.pack(side="right", padx=20)
             self.clock = tk.Label(right, text="", bg=T.BG, fg=T.MUTED, font=F(9)); self.clock.pack(side="right", padx=(12, 0))
             Btn(right, "◐", self.theme_menu, "ghost", w=36, small=True).pack(side="right", padx=3)
-            Btn(right, "ने" if _lang == "en" else "EN", self.toggle_lang, "ghost", w=36, small=True).pack(side="right", padx=3)
+            Btn(right, "ने" if _lang == "en" else "EN", self.toggle_lang, "ghost", w=48, small=True).pack(side="right", padx=3)
             Btn(right, "⟳", lambda: self.go(self.page_key, force=True), "ghost", w=36, small=True).pack(side="right", padx=3)
             self._tick()
         def _tick(self):
@@ -2852,11 +2868,21 @@ if HAS_TK:
             self.sf = {}
             for i, (k, lbl, dv) in enumerate((("shop_name", "दुकान नाम", s["shop_name"]), ("address", "ठेगाना", s["address"]),
                                               ("mobile", "मोबाइल", s["mobile"]), ("pan", "PAN / VAT", s["pan"]),
-                                              ("owner", "सञ्चालक", s["owner"]), ("bill_note", "बिल टिप्पणी", s["bill_note"]))):
+                                              ("owner", "सञ्चालक", s["owner"]), ("email", "इमेल", s["email"]),
+                                              ("website", "वेबसाइट", s["website"]), ("bill_note", "बिल टिप्पणी", s["bill_note"]))):
                 r, cc = divmod(i, 2)
                 cell = tk.Frame(g, bg=T.PANEL); cell.grid(row=r, column=cc, sticky="ew", padx=6, pady=5)
                 self.sf[k] = Field(cell, lbl, 28, T.PANEL, dv or "")
-            Btn(c.body, "💾 सेभ", self.save_shop, "ok").pack(anchor="w", pady=(10, 0))
+            br = tk.Frame(c.body, bg=T.PANEL); br.pack(anchor="w", pady=(10, 0))
+            Btn(br, "💾 सेभ", self.save_shop, "ok").pack(side="left", padx=(0, 6))
+            Btn(br, "🗑 खाली गर्नु", self.clear_shop, "bad", small=True).pack(side="left", padx=3)
+            Btn(br, "↺ डिफल्ट", self.reset_shop, "ghost", small=True).pack(side="left", padx=3)
+            # clickable links
+            lr = tk.Frame(c.body, bg=T.PANEL); lr.pack(anchor="w", pady=(8, 0))
+            for txt, url in (("🔗 Turso Dashboard", "https://turso.tech/"), ("🔗 GitHub Repo", "https://github.com/khemraj73-coder/shuvam-recondition-house")):
+                lb = tk.Label(lr, text=txt, bg=T.PANEL, fg=T.ACCENT, font=F(8, "bold"), cursor="hand2")
+                lb.pack(side="left", padx=(0, 14))
+                lb.bind("<Button-1>", lambda e, u=url: webbrowser.open(u))
             c2 = self.card(b, "🎨 रूप र भाषा")
             row = tk.Frame(c2.body, bg=T.PANEL); row.pack(fill="x")
             th = Combo(row, t("theme"), [THEMES[k].label for k in THEME_ORDER], THEMES[T.key].label, 22, T.PANEL)
@@ -2881,6 +2907,7 @@ if HAS_TK:
             cell = tk.Frame(gg, bg=T.PANEL); cell.grid(row=0, column=2, padx=6, sticky="ew")
             self.nu["r"] = Combo(cell, "Role", ["staff", "owner"], "staff", 12, T.PANEL)
             Btn(c4.body, "＋ थप्नुहोस्", self.add_user, "primary").pack(anchor="w", pady=(10, 0))
+            Btn(c4.body, "🗑 चयन गरिएको हटाउनु", self.del_user, "bad", small=True).pack(anchor="w", pady=(6, 0))
             self.utbl = Table(c4.body, [("username", "प्रयोगकर्ता", 180), ("role", "भूमिका", 120),
                                         ("created_at", "सिर्जना", 200)], 5)
             self.utbl.pack(fill="x", pady=(10, 0))
@@ -2901,6 +2928,10 @@ if HAS_TK:
             Btn(r6, "💾 सेभ", self.cloud_save_ui, "ghost", small=True).pack(side="left", padx=3)
             Btn(r6, "⬆ Sync", self.cloud_push_ui, "ok", small=True).pack(side="left", padx=3)
             Btn(r6, "⬇ Restore", self.cloud_pull_ui, "warn", small=True).pack(side="left", padx=3)
+            Btn(r6, "🔄 जाँच", self.test_cloud, "ghost", small=True).pack(side="left", padx=3)
+            r6b = tk.Frame(c6.body, bg=T.PANEL); r6b.pack(fill="x", pady=(6, 0))
+            Btn(r6b, "↺ डिफल्ट Turso", lambda: (self.cl_url.set(TURSO_URL_ULTIMATE), self.cl_tok.set(TURSO_TOKEN_ULTIMATE)), "ghost", small=True).pack(side="left", padx=3)
+            Btn(r6b, "🔗 Turso खोल्नु", lambda: webbrowser.open("https://turso.tech/"), "ghost", small=True).pack(side="left", padx=3)
             if not dpapi_ok():
                 tk.Label(c6.body, text="⚠ यो OS मा DPAPI छैन — cloud sync Windows मा मात्र चल्छ।",
                          bg=T.PANEL, fg=T.WARN, font=F(8)).pack(anchor="w", pady=(6, 0))
@@ -2910,6 +2941,8 @@ if HAS_TK:
             r7 = tk.Frame(c7.body, bg=T.PANEL); r7.pack(fill="x", pady=(8, 0))
             Btn(r7, "💾 URL सेभ", self.save_upurl, "ghost", small=True).pack(side="left", padx=3)
             Btn(r7, "🔄 जाँच", self.check_update, "primary", small=True).pack(side="left", padx=3)
+            Btn(r7, "↺ डिफल्ट GitHub", lambda: self.up_url.set(UPDATE_URL_DEFAULT), "ghost", small=True).pack(side="left", padx=3)
+            Btn(r7, "🔗 Release खोल्नु", lambda: webbrowser.open("https://github.com/khemraj73-coder/shuvam-recondition-house/releases"), "ghost", small=True).pack(side="left", padx=3)
             tk.Label(c7.body, text=f"हालको: v{APP_VER} · {APP_CODE}", bg=T.PANEL, fg=T.FAINT, font=F(8)).pack(anchor="w", pady=(8, 0))
             if os.name == "nt":
                 c8 = self.card(b, "😊 Windows Hello", "Fingerprint / Face / PIN")
@@ -2922,16 +2955,35 @@ if HAS_TK:
             v = {k: w.get().strip() for k, w in self.sf.items()}
             if not v["shop_name"]: Toast.show(self.root, "दुकान नाम खाली हुन सक्दैन", "bad"); return
             with db().tx() as c:
-                c.execute("UPDATE settings SET shop_name=?,address=?,mobile=?,pan=?,owner=?,bill_note=? WHERE id=1",
-                          (v["shop_name"], v["address"], v["mobile"], v["pan"], v["owner"], v["bill_note"]))
+                c.execute("UPDATE settings SET shop_name=?,address=?,mobile=?,pan=?,owner=?,email=?,website=?,bill_note=? WHERE id=1",
+                          (v["shop_name"], v["address"], v["mobile"], v["pan"], v["owner"], v["email"], v["website"], v["bill_note"]))
                 db().audit(c, "SHOP_SAVE", v["shop_name"])
             self.root.title(f"{v['shop_name']} · {APP_CODE} v{APP_VER}")
             Toast.show(self.root, "✅ सेभ", "ok")
+        def clear_shop(self):
+            if not confirm(self.root, t("confirm"), "मोबाइल, PAN, इमेल, वेबसाइट, टिप्पणी खाली गर्ने?"): return
+            for k in ("mobile", "pan", "owner", "email", "website", "bill_note"):
+                self.sf[k].set("")
+            Toast.show(self.root, "खाली गरियो", "ok")
+        def reset_shop(self):
+            if not confirm(self.root, t("confirm"), "दुकान नाम र ठेगाना डिफल्टमा फर्काउने?"): return
+            self.sf["shop_name"].set(APP_NAME)
+            self.sf["address"].set("Hatti Chowk, Tulsipur, Dang")
+            Toast.show(self.root, "डिफल्ट भयो", "ok")
         def add_user(self):
             try:
                 user_add(self.nu["u"].get(), self.nu["p"].get(), self.nu["r"].get())
                 self.nu["u"].set(""); self.nu["p"].set("")
                 Toast.show(self.root, "✅ प्रयोगकर्ता थपियो", "ok"); self.rf_set()
+            except Exception as e: messagebox.showerror("त्रुटि", str(e), parent=self.root)
+        def del_user(self):
+            sel = self.utbl.selected()
+            if not sel: Toast.show(self.root, "पहिले प्रयोगकर्ता छान्नुहोस्", "warn"); return
+            u = sel["username"]
+            if u == db().actor: Toast.show(self.root, "आफैलाई हटाउन मिल्दैन", "bad"); return
+            if not confirm(self.root, t("confirm"), f"{u} हटाउने?"): return
+            try:
+                user_delete(u, db().actor); Toast.show(self.root, "🗑 हटाइयो", "bad"); self.rf_set()
             except Exception as e: messagebox.showerror("त्रुटि", str(e), parent=self.root)
         def do_backup(self):
             p = filedialog.asksaveasfilename(defaultextension=".db", initialfile=f"shuvam_{datetime.now():%Y%m%d_%H%M}.db", parent=self.root)
@@ -2985,6 +3037,12 @@ if HAS_TK:
                         if getattr(sys, "frozen", False):
                             self.root.after(800, self.root.destroy)
                     except Exception as e: messagebox.showerror("Update", str(e), parent=self.root)
+        def test_cloud(self):
+            try:
+                TursoClient(self.cl_url.get().strip(), self.cl_tok.get().strip()).ping()
+                Toast.show(self.root, "✅ Turso जडान सफल", "ok")
+            except Exception as e:
+                messagebox.showerror("Cloud", str(e), parent=self.root)
         def _silent_cloud_sync(self):
             def work():
                 try:
@@ -3023,6 +3081,8 @@ if HAS_TK:
     def clear_root(root):
         for w in root.winfo_children(): w.destroy()
         root.unbind("<Motion>")
+        try: root.unbind_all("<MouseWheel>")
+        except Exception: pass
     def login_screen(root):
         clear_root(root)
         s = db().one("SELECT * FROM settings WHERE id=1")
