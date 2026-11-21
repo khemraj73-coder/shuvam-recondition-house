@@ -5,6 +5,6 @@
   "sha256": "F1A8E64FA6FE895F2D042A7FA38BB56CE03DD5F32BF66D71A2C3FAC7A5A4FE68",
   "exe_sha256": "F1A8E64FA6FE895F2D042A7FA38BB56CE03DD5F32BF66D71A2C3FAC7A5A4FE68",
   "py_url": "https://raw.githubusercontent.com/khemraj73-coder/shuvam-recondition-house/main/shuvam_ultimate.py",
-  "py_sha256": "8906547a5238ba6c18141cb4982d690110ff8781b7384413b5303b4242b3b2a3",
+  "py_sha256": "33897b27054826802ff2b0d92d1fab927185100e1ced1db7fe7ae94c1e481052",
   "notes": "SHUVAM ULTIMATE v10.1.1 — login screen layout & focus fix (buttons now pixel-accurate), window fits 1366x768 screens, safer auto-update (EXE-only, checksum verified), reminders not repeated, cloud config BOM-safe."
 }
