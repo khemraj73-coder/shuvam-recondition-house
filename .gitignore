@@ -36,3 +36,7 @@ build/
 build_*/
 *.spec
 *_shot.png
+
+# Runtime logs
+error.log
+*.log
