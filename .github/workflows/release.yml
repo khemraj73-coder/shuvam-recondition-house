@@ -26,7 +26,7 @@ jobs:
         run: |
           python -c "import json; d=json.load(open('version.json')); d['sha256']='${{ steps.sha.outputs.sha256 }}'; json.dump(d,open('version.json','w'),indent=2)"
       - name: Create Release
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@v3
         with:
           files: |
             dist/SHUVAM Recondition House/SHUVAM Recondition House.exe
